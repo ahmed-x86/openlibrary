@@ -156,11 +156,11 @@ jobs:
       - name: Install System Dependencies
         run: |
           apk update
-          apk add --no-cache build-base cmake pkgconf libzip-dev rust cargo patchelf upx fontconfig-dev gtk+3.0-dev git
+          apk add --no-cache build-base cmake pkgconf libzip-dev rust cargo patchelf upx fontconfig-dev gtk+3.0-dev git ninja
 
       - name: Build Project
         run: |
-          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
           cmake --build build --config Release
 
       - name: Compress Binary
