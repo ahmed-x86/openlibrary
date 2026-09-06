@@ -1,0 +1,652 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # ===== لينكس (glibc) - المرحلة السريعة: باينري ELF فقط، بدون تغليف =====
+  build-linux-elf:
+    name: Build Linux ELF (glibc)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential pkg-config libzip-dev patchelf upx-ucl libfontconfig1-dev libgtk-3-dev
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build Project
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release
+
+      - name: Compress Linux Binary
+        run: upx --best --lzma build/openlibrary || true
+
+      - name: Prepare Linux ELF Binary
+        run: cp build/openlibrary openlibrary-elf-glibc
+
+      - name: Upload Linux ELF Binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenLibrary-Linux-ELF
+          path: openlibrary-elf-glibc
+
+  # ===== لينكس (glibc) - تغليف .deb و .rpm =====
+  build-linux-packages:
+    name: Build Linux Packages (.deb / .rpm)
+    needs: build-linux-elf
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download Linux ELF Binary
+        uses: actions/download-artifact@v4
+        with:
+          name: OpenLibrary-Linux-ELF
+          path: elf-src
+
+      - name: Install Packaging Dependencies
+        run: sudo apt-get update && sudo apt-get install -y rpm
+
+      - name: Prepare Binary for Packaging
+        run: |
+          cp elf-src/openlibrary-elf-glibc openlibrary-bin
+          chmod +x openlibrary-bin
+
+      # بناء حزمة .deb
+      - name: Build .deb Package
+        run: |
+          PKG_ROOT="deb-build/openlibrary_1.0.0_amd64"
+          mkdir -p "${PKG_ROOT}/DEBIAN"
+          mkdir -p "${PKG_ROOT}/usr/bin"
+          mkdir -p "${PKG_ROOT}/usr/share/applications"
+          mkdir -p "${PKG_ROOT}/usr/share/icons/hicolor/256x256/apps"
+
+          cp openlibrary-bin "${PKG_ROOT}/usr/bin/openlibrary"
+
+          cat > "${PKG_ROOT}/DEBIAN/control" <<EOF
+          Package: openlibrary
+          Version: 1.0.0
+          Architecture: amd64
+          Maintainer: ahmed-x86
+          Description: OpenLibrary - Open source epub reader
+           قارئ كتب إلكترونية مفتوح المصدر
+          Section: utils
+          Priority: optional
+          EOF
+
+          sed -i 's/^          //' "${PKG_ROOT}/DEBIAN/control"
+
+          dpkg-deb --build --root-owner-group "${PKG_ROOT}"
+          mv deb-build/*.deb OpenLibrary-Linux.deb
+
+      - name: Upload .deb Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenLibrary-Linux-deb
+          path: OpenLibrary-Linux.deb
+
+      # بناء حزمة .rpm
+      - name: Build .rpm Package
+        run: |
+          mkdir -p rpmbuild/{SPECS,SOURCES,BUILD,RPMS,SRPMS}
+
+          mkdir -p rpmbuild/SOURCES/openlibrary-1.0.0
+          cp openlibrary-bin rpmbuild/SOURCES/openlibrary-1.0.0/openlibrary
+          tar -czf rpmbuild/SOURCES/openlibrary-1.0.0.tar.gz -C rpmbuild/SOURCES openlibrary-1.0.0
+
+          cat > rpmbuild/SPECS/openlibrary.spec <<'SPEC'
+          Name:           openlibrary
+          Version:        1.0.0
+          Release:        1%{?dist}
+          Summary:        Open source epub reader
+          License:        GPL
+          Source0:        openlibrary-1.0.0.tar.gz
+
+          %description
+          OpenLibrary - قارئ كتب إلكترونية مفتوح المصدر
+
+          %prep
+          %setup -q
+
+          %install
+          mkdir -p %{buildroot}/usr/bin
+          cp openlibrary %{buildroot}/usr/bin/
+
+          %files
+          /usr/bin/openlibrary
+          SPEC
+
+          sed -i 's/^          //' rpmbuild/SPECS/openlibrary.spec
+
+          rpmbuild --define "_topdir $(pwd)/rpmbuild" -bb rpmbuild/SPECS/openlibrary.spec
+          find rpmbuild/RPMS -name "*.rpm" -exec cp {} OpenLibrary-Linux.rpm \;
+
+      - name: Upload .rpm Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenLibrary-Linux-rpm
+          path: OpenLibrary-Linux.rpm
+
+  # ===== Alpine (musl) - المرحلة السريعة =====
+  build-alpine-elf:
+    name: Build Alpine ELF (musl libc)
+    runs-on: ubuntu-latest
+    container:
+      image: alpine:latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install System Dependencies
+        run: |
+          apk update
+          apk add --no-cache build-base cmake pkgconf libzip-dev rust cargo patchelf upx fontconfig-dev gtk+3.0-dev
+
+      - name: Build Project
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release
+
+      - name: Compress Binary
+        run: upx --best --lzma build/openlibrary || true
+
+      - name: Prepare musl ELF Binary
+        run: cp build/openlibrary openlibrary-elf-musllibc
+
+      - name: Upload Alpine Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenLibrary-Linux-ELF-musl
+          path: openlibrary-elf-musllibc
+
+  # ===== تغليف .deb و .rpm نسخة musl =====
+  build-linux-packages-musl:
+    name: Build Linux Packages (.deb / .rpm — musl)
+    needs: build-alpine-elf
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download musl ELF Binary
+        uses: actions/download-artifact@v4
+        with:
+          name: OpenLibrary-Linux-ELF-musl
+          path: elf-src
+
+      - name: Install Packaging Dependencies
+        run: sudo apt-get update && sudo apt-get install -y rpm
+
+      - name: Prepare Binary for Packaging
+        run: |
+          cp elf-src/openlibrary-elf-musllibc openlibrary-bin
+          chmod +x openlibrary-bin
+
+      - name: Build .deb Package
+        run: |
+          PKG_ROOT="deb-build/openlibrary_1.0.0_amd64"
+          mkdir -p "${PKG_ROOT}/DEBIAN"
+          mkdir -p "${PKG_ROOT}/usr/bin"
+
+          cp openlibrary-bin "${PKG_ROOT}/usr/bin/openlibrary"
+
+          cat > "${PKG_ROOT}/DEBIAN/control" <<EOF
+          Package: openlibrary
+          Version: 1.0.0
+          Architecture: amd64
+          Maintainer: ahmed-x86
+          Description: OpenLibrary - Open source epub reader (musl build)
+           قارئ كتب إلكترونية مفتوح المصدر
+          Section: utils
+          Priority: optional
+          EOF
+
+          sed -i 's/^          //' "${PKG_ROOT}/DEBIAN/control"
+          dpkg-deb --build --root-owner-group "${PKG_ROOT}"
+          mv deb-build/*.deb OpenLibrary-Linux-musl.deb
+
+      - name: Upload .deb Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenLibrary-Linux-musl-deb
+          path: OpenLibrary-Linux-musl.deb
+
+      - name: Build .rpm Package
+        run: |
+          mkdir -p rpmbuild/{SPECS,SOURCES,BUILD,RPMS,SRPMS}
+          mkdir -p rpmbuild/SOURCES/openlibrary-1.0.0
+          cp openlibrary-bin rpmbuild/SOURCES/openlibrary-1.0.0/openlibrary
+          tar -czf rpmbuild/SOURCES/openlibrary-1.0.0.tar.gz -C rpmbuild/SOURCES openlibrary-1.0.0
+
+          cat > rpmbuild/SPECS/openlibrary.spec <<'SPEC'
+          Name:           openlibrary
+          Version:        1.0.0
+          Release:        1%{?dist}
+          Summary:        Open source epub reader (musl build)
+          License:        GPL
+          Source0:        openlibrary-1.0.0.tar.gz
+
+          %description
+          OpenLibrary - قارئ كتب إلكترونية مفتوح المصدر
+
+          %prep
+          %setup -q
+
+          %install
+          mkdir -p %{buildroot}/usr/bin
+          cp openlibrary %{buildroot}/usr/bin/
+
+          %files
+          /usr/bin/openlibrary
+          SPEC
+
+          sed -i 's/^          //' rpmbuild/SPECS/openlibrary.spec
+          rpmbuild --define "_topdir $(pwd)/rpmbuild" -bb rpmbuild/SPECS/openlibrary.spec
+          find rpmbuild/RPMS -name "*.rpm" -exec cp {} OpenLibrary-Linux-musl.rpm \;
+
+      - name: Upload .rpm Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenLibrary-Linux-musl-rpm
+          path: OpenLibrary-Linux-musl.rpm
+
+  # ===== Alpine (musl) - تغليف حزمة .apk رسمية بأداة abuild =====
+  build-alpine-apk:
+    name: Build Alpine .apk Package
+    needs: build-alpine-elf
+    runs-on: ubuntu-latest
+    container:
+      image: alpine:latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download musl ELF Binary
+        uses: actions/download-artifact@v4
+        with:
+          name: OpenLibrary-Linux-ELF-musl
+          path: elf-src
+
+      - name: Install abuild Tooling
+        run: |
+          apk update
+          apk add --no-cache alpine-sdk sudo
+
+      - name: Create Non-root Build User
+        run: |
+          adduser -D builder
+          addgroup builder abuild
+          echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+
+      - name: Generate abuild Signing Key
+        run: su builder -c "abuild-keygen -a -i -n"
+
+      - name: Prepare APKBUILD Sources
+        run: |
+          mkdir -p apk-pkg
+          cp elf-src/openlibrary-elf-musllibc apk-pkg/openlibrary
+
+          cat > apk-pkg/APKBUILD <<'EOF'
+          pkgname=openlibrary
+          pkgver=1.0.0
+          pkgrel=0
+          pkgdesc="Open source epub reader - قارئ كتب إلكترونية مفتوح المصدر"
+          url="https://github.com/ahmed-x86/openlibrary"
+          arch="x86_64"
+          license="GPL"
+          depends="fontconfig libzip"
+          options="!strip !check"
+          source="openlibrary"
+
+          package() {
+              install -Dm755 "$srcdir"/openlibrary "$pkgdir"/usr/bin/openlibrary
+          }
+          EOF
+          sed -i 's/^          //' apk-pkg/APKBUILD
+
+      - name: Build .apk Package with abuild
+        run: |
+          chmod +x apk-pkg/openlibrary
+          chown -R builder:builder apk-pkg
+          cd apk-pkg
+          su builder -c "cd \$(pwd) && abuild checksum && abuild -r"
+          find ~builder/packages -name "*.apk" -exec cp {} ../OpenLibrary-Alpine.apk \;
+
+      - name: Upload Alpine .apk Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenLibrary-Alpine-apk
+          path: OpenLibrary-Alpine.apk
+
+  # ===== ويندوز =====
+  build-windows:
+    name: Build on windows-latest
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install UPX (Windows)
+        run: choco install upx
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build Project
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release
+
+      - name: Compress Windows Binary
+        run: upx --best --lzma build/Release/openlibrary.exe || true
+
+      - name: Package Windows
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path OpenLibrary-Windows
+          Copy-Item build\Release\openlibrary.exe -Destination OpenLibrary-Windows\
+          Compress-Archive -Path OpenLibrary-Windows -DestinationPath OpenLibrary-Windows.zip
+
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenLibrary-Windows
+          path: OpenLibrary-Windows.zip
+
+  # ===== تغليف حزمة Arch Linux =====
+  build-arch:
+    name: Build Arch Package (PKGBUILD)
+    needs: build-linux-elf
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:base-devel
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download glibc Binary Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: OpenLibrary-Linux-ELF
+          path: elf-src
+
+      - name: Install Packaging Dependencies
+        run: pacman -Syu --noconfirm --needed sudo
+
+      - name: Create Non-root Build User
+        run: |
+          useradd -m builder
+          echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+
+      - name: Prepare PKGBUILD Sources
+        run: |
+          mkdir -p arch-pkg
+          cp elf-src/openlibrary-elf-glibc arch-pkg/openlibrary
+          chmod +x arch-pkg/openlibrary
+
+          cat > arch-pkg/PKGBUILD <<'EOF'
+          pkgname=openlibrary
+          pkgver=1.0.0
+          pkgrel=1
+          pkgdesc="Open source epub reader - قارئ كتب إلكترونية مفتوح المصدر"
+          arch=('x86_64')
+          url="https://github.com/ahmed-x86/openlibrary"
+          license=('GPL')
+          depends=('fontconfig' 'libzip')
+          source=("openlibrary")
+          sha256sums=('SKIP')
+
+          package() {
+              install -Dm755 "${srcdir}/openlibrary" "${pkgdir}/usr/bin/openlibrary"
+          }
+          EOF
+          sed -i 's/^          //' arch-pkg/PKGBUILD
+
+      - name: Build Package with makepkg -s
+        run: |
+          chown -R builder:builder arch-pkg
+          cd arch-pkg
+          su builder -c "makepkg -s --noconfirm"
+          mv openlibrary-1.0.0-1-x86_64.pkg.tar.zst ../OpenLibrary-Linux.pkg.tar.zst
+
+      - name: Upload Arch Package Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenLibrary-Linux-pkg
+          path: OpenLibrary-Linux.pkg.tar.zst
+
+  build-arch-musl:
+    name: Build Arch Package (PKGBUILD — musl)
+    needs: build-alpine-elf
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:base-devel
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download musl Binary Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: OpenLibrary-Linux-ELF-musl
+          path: elf-src
+
+      - name: Install Packaging Dependencies
+        run: pacman -Syu --noconfirm --needed sudo
+
+      - name: Create Non-root Build User
+        run: |
+          useradd -m builder
+          echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+
+      - name: Prepare PKGBUILD Sources
+        run: |
+          mkdir -p arch-pkg
+          cp elf-src/openlibrary-elf-musllibc arch-pkg/openlibrary
+          chmod +x arch-pkg/openlibrary
+
+          cat > arch-pkg/PKGBUILD <<'EOF'
+          pkgname=openlibrary
+          pkgver=1.0.0
+          pkgrel=1
+          pkgdesc="Open source epub reader (musl build) - قارئ كتب إلكترونية مفتوح المصدر"
+          arch=('x86_64')
+          url="https://github.com/ahmed-x86/openlibrary"
+          license=('GPL')
+          depends=('fontconfig' 'libzip')
+          source=("openlibrary")
+          sha256sums=('SKIP')
+
+          package() {
+              install -Dm755 "${srcdir}/openlibrary" "${pkgdir}/usr/bin/openlibrary"
+          }
+          EOF
+          sed -i 's/^          //' arch-pkg/PKGBUILD
+
+      - name: Build Package with makepkg -s
+        run: |
+          chown -R builder:builder arch-pkg
+          cd arch-pkg
+          su builder -c "makepkg -s --noconfirm"
+          mv openlibrary-1.0.0-1-x86_64.pkg.tar.zst ../OpenLibrary-Linux-musl.pkg.tar.zst
+
+      - name: Upload Arch Package Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenLibrary-Linux-musl-pkg
+          path: OpenLibrary-Linux-musl.pkg.tar.zst
+
+  # ===== تغليف حزم Void Linux =====
+  build-void:
+    name: Build Void Linux Packages (.xbps — glibc + musl)
+    needs: [build-linux-elf, build-alpine-elf]
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/void-linux/void-glibc-full:latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Packaging Dependencies
+        run: |
+          xbps-install -Suy xbps
+          xbps-install -Suy
+          xbps-install -y base-devel
+
+      - name: Download glibc Binary Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: OpenLibrary-Linux-ELF
+          path: void-glibc-src
+
+      - name: Download musl Binary Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: OpenLibrary-Linux-ELF-musl
+          path: void-musl-src
+
+      - name: Prepare Package Root (glibc)
+        run: |
+          PKG_ROOT="void-pkg-root"
+          mkdir -p "${PKG_ROOT}/usr/bin"
+          cp void-glibc-src/openlibrary-elf-glibc "${PKG_ROOT}/usr/bin/openlibrary"
+          chmod +x "${PKG_ROOT}/usr/bin/openlibrary"
+
+      - name: Build glibc .xbps Package with xbps-create
+        run: |
+          xbps-create \
+            -A x86_64 \
+            -n openlibrary-1.0.0_1 \
+            -s "Open source epub reader" \
+            --license GPL \
+            --homepage "https://github.com/ahmed-x86/openlibrary" \
+            --maintainer "ahmed-x86" \
+            void-pkg-root
+
+          mv openlibrary-1.0.0_1.x86_64.xbps OpenLibrary-Void-glibc.xbps
+
+      - name: Upload Void glibc Package Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenLibrary-Void-glibc-xbps
+          path: OpenLibrary-Void-glibc.xbps
+
+      - name: Prepare Package Root (musl)
+        run: |
+          PKG_ROOT="void-pkg-root-musl"
+          mkdir -p "${PKG_ROOT}/usr/bin"
+          cp void-musl-src/openlibrary-elf-musllibc "${PKG_ROOT}/usr/bin/openlibrary"
+          chmod +x "${PKG_ROOT}/usr/bin/openlibrary"
+
+      - name: Build musl .xbps Package with xbps-create
+        run: |
+          xbps-create \
+            -A x86_64-musl \
+            -n openlibrary-1.0.0_1 \
+            -s "Open source epub reader" \
+            --license GPL \
+            --homepage "https://github.com/ahmed-x86/openlibrary" \
+            --maintainer "ahmed-x86" \
+            void-pkg-root-musl
+
+          mv openlibrary-1.0.0_1.x86_64-musl.xbps OpenLibrary-Void-musl.xbps
+
+      - name: Upload Void musl Package Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenLibrary-Void-musl-xbps
+          path: OpenLibrary-Void-musl.xbps
+
+  release:
+    name: Create GitHub Release
+    needs: [build-linux-packages, build-linux-packages-musl, build-windows, build-arch, build-arch-musl, build-void, build-alpine-apk]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Generate Download Table
+        id: notes
+        run: |
+          TAG="${{ github.ref_name }}"
+          REPO="${{ github.repository }}"
+          BASE_URL="https://github.com/${REPO}/releases/download/${TAG}"
+
+          cell() {
+            local file="$1"
+            local path="artifacts/${file}"
+            if [ -f "$path" ]; then
+              local size
+              size=$(du -h "$path" | cut -f1 | sed 's/[[:space:]]*//g')
+              echo "[${size}](${BASE_URL}/${file})"
+            else
+              echo "-----"
+            fi
+          }
+
+          {
+            echo "## 📦 OpenLibrary ${TAG}"
+            echo ""
+            echo "اختر النسخة المناسبة لجهازك من الجدول تحت وحمّلها مباشرة (الحجم نفسه هو رابط التحميل) 👇"
+            echo ""
+
+            echo "### 🐧 لينكس (x86_64)"
+            echo ""
+            echo "| المكتبة \\ الصيغة | ELF | .deb | .rpm | .pkg.tar.zst | .xbps | .apk |"
+            echo "|:---|:---:|:---:|:---:|:---:|:---:|:---:|"
+            echo "| **glibc** | $(cell openlibrary-elf-glibc) | $(cell OpenLibrary-Linux.deb) | $(cell OpenLibrary-Linux.rpm) | $(cell OpenLibrary-Linux.pkg.tar.zst) | $(cell OpenLibrary-Void-glibc.xbps) | ----- |"
+            echo "| **musl**  | $(cell openlibrary-elf-musllibc) | $(cell OpenLibrary-Linux-musl.deb) | $(cell OpenLibrary-Linux-musl.rpm) | $(cell OpenLibrary-Linux-musl.pkg.tar.zst) | $(cell OpenLibrary-Void-musl.xbps) | $(cell OpenLibrary-Alpine.apk) |"
+            echo ""
+
+            echo "### 🪟 ويندوز"
+            echo ""
+            echo "| الصيغة \\ المعمارية | x86_64 |"
+            echo "|:---|:---:|"
+            echo "| **أرشيف (exe)** | $(cell OpenLibrary-Windows.zip) |"
+            echo ""
+            echo "---"
+            echo ""
+            echo "> 🐧 **إيه هو ملف الـ ELF؟** ده صيغة البرامج التنفيذية الأساسية في لينكس (زي .exe في ويندوز). حمّله، وعشان تشغّله: دوس عليه Right Click ثم Properties/خصائص وفعّل خيار \"اجعله قابل للتنفيذ / Executable\"، أو من التيرمنال اكتب:"
+            echo ">"
+            echo "> \`chmod +x /path/to/file\`"
+            echo ">"
+            echo "> 📦 **glibc ولا musl؟** لو مش عارف، غالبًا توزيعتك بتستخدم **glibc** (زي Ubuntu، Debian، Fedora، Arch، Void...) وده الاختيار الآمن لمعظم الناس. أما **musl** فبتستخدمها توزيعات زي Alpine، ومستخدميها عادةً عارفين إنهم بيستخدموها."
+            echo ""
+            echo "---"
+          } > RELEASE_NOTES.md
+
+          cat RELEASE_NOTES.md
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          body_path: RELEASE_NOTES.md
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
