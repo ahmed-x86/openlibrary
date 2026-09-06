@@ -1,0 +1,13 @@
+export global Theme {
+    in-out property <bool> is-dark: true;
+    
+    out property <color> bg: is-dark ? #09090b : #ffffff;
+    out property <color> surface: is-dark ? #121215 : #f4f4f5;
+    out property <color> border: is-dark ? #27272a : #e4e4e7;
+    out property <color> text: is-dark ? #f4f4f5 : #09090b;
+    out property <color> text-muted: is-dark ? #a1a1aa : #71717a;
+    
+    out property <color> button-bg: is-dark ? #18181b : #ffffff;
+    out property <color> primary-bg: is-dark ? #ffffff : #09090b;
+    out property <color> primary-text: is-dark ? #000000 : #ffffff;
+}
