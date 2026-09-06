@@ -1,0 +1,432 @@
+import { Theme } from "theme.slint";
+import { ShadcnButton, IconButton, TabButton, BookCard, MetadataRow } from "widgets.slint";
+import { AboutPage } from "about.slint";
+
+export component MainWindow inherits Window {
+    title: "الشاملة المفتوحة - Open Shamela";
+    background: Theme.bg;
+    preferred-width: 1100px;
+    preferred-height: 750px;
+    min-width: 600px;
+    min-height: 400px;
+    default-font-family: "system-ui, sans-serif";
+
+    callback open-epub-dialog();
+    callback go-next-chapter();
+    callback go-prev-chapter();
+    callback go-back-home();
+    callback go-to-chapter(int);
+    callback open-link(string);
+
+    in-out property <int> current-tab: 0; // 0: الرئيسية | 1: الإعدادات | 2: حول
+    in-out property <bool> reading-mode: false;
+    in-out property <bool> show-info: false;
+    property <bool> editing-chapter: false;
+    property <bool> dropdown-open: false;
+
+    in-out property <string> book-title: "";
+    in-out property <string> book-author: "";
+    in-out property <string> chapter-content: "";
+    in-out property <int> current-chapter-num: 1;
+    in-out property <int> chapter-count: 0;
+    
+    in-out property <string> meta-language: "";
+    in-out property <string> meta-publisher: "";
+    in-out property <string> meta-date: "";
+    in-out property <string> meta-description: "";
+    in-out property <string> meta-subject: "";
+    in-out property <string> meta-rights: "";
+    in-out property <string> meta-identifier: "";
+    in-out property <string> meta-source: "";
+    in-out property <string> meta-format: "";
+    in-out property <string> meta-chapters: "";
+
+    in-out property <bool> can-go-next: false;
+    in-out property <bool> can-go-prev: false;
+
+    Rectangle {
+        VerticalLayout {
+            // شريط التنقل العلوي
+            VerticalLayout {
+                HorizontalLayout {
+                    padding-left: 24px;
+                    padding-right: 24px;
+                    padding-top: 14px;
+                    padding-bottom: 14px;
+                    alignment: space-between;
+
+                    HorizontalLayout {
+                        spacing: 8px;
+                        alignment: start;
+
+                        if !reading-mode && !show-info && root.current-tab == 0: ShadcnButton {
+                            text: "📖 فتح كتاب";
+                            width: 120px;
+                            clicked => { root.open-epub-dialog() }
+                        }
+
+                        if reading-mode && !show-info: IconButton {
+                            icon: @image-url("icons/info.svg");
+                            clicked => { show-info = true; }
+                        }
+                    }
+
+                    HorizontalLayout {
+                        spacing: 12px;
+                        alignment: end;
+
+                        Text {
+                            text: show-info ? "معلومات الكتاب" : (reading-mode ? root.book-title : (root.current-tab == 1 ? "الإعدادات" : (root.current-tab == 2 ? "حول" : "Open Shamela")));
+                            color: Theme.text;
+                            font-size: 18px;
+                            font-weight: 700;
+                            vertical-alignment: center;
+                            overflow: elide;
+                            horizontal-alignment: right;
+                        }
+
+                        Rectangle {
+                            width: 24px;
+                            height: 24px;
+                            background: Theme.text;
+                            border-radius: 4px;
+                        }
+
+                        if reading-mode || show-info: ShadcnButton {
+                            text: show-info ? "القراءة ←" : "← رجوع";
+                            primary: false;
+                            width: 85px;
+                            height: 32px;
+                            clicked => {
+                                if (show-info) {
+                                    show-info = false;
+                                } else {
+                                    root.go-back-home();
+                                }
+                            }
+                        }
+                    }
+                }
+                Rectangle { background: Theme.border; height: 1px; }
+            }
+
+            Rectangle {
+                vertical-stretch: 1;
+
+                // الصفحة الرئيسية
+                if !reading-mode && !show-info && root.current-tab == 0: VerticalLayout {
+                    padding-left: 32px;
+                    padding-right: 32px;
+                    padding-top: 48px;
+                    padding-bottom: 32px;
+                    spacing: 48px;
+                    alignment: start;
+
+                    VerticalLayout {
+                        spacing: 16px;
+                        alignment: center;
+                        
+                        Text {
+                            text: "مكتبتك الرقمية مفتوحة المصدر";
+                            color: Theme.text;
+                            font-size: 36px;
+                            font-weight: 800;
+                            horizontal-alignment: center;
+                        }
+                        Text {
+                            text: "قارئ ملفات EPUB سريع، خفيف، ومصمم ليكون مريحاً للعين.";
+                            color: Theme.text-muted;
+                            font-size: 14px;
+                            horizontal-alignment: center;
+                        }
+
+                        HorizontalLayout {
+                            alignment: center;
+                            ShadcnButton {
+                                text: "📖 فتح كتاب EPUB";
+                                width: 200px;
+                                height: 44px;
+                                clicked => { root.open-epub-dialog() }
+                            }
+                        }
+                    }
+
+                    HorizontalLayout {
+                        spacing: 16px;
+                        min-height: 160px;
+                        BookCard { title: "مقدمة في ابن خلدون"; author: "عبد الرحمن بن خلدون"; date: "أضيف: اليوم"; }
+                        BookCard { title: "Clean Code"; author: "Robert C. Martin"; date: "أضيف: أمس"; }
+                        BookCard { title: "Arch Linux Wiki (Offline)"; author: "Community"; date: "أضيف: الأسبوع الماضي"; }
+                    }
+                }
+
+                // صفحة الإعدادات
+                if !reading-mode && !show-info && root.current-tab == 1: VerticalLayout {
+                    padding: 32px;
+                    spacing: 32px;
+                    alignment: start;
+
+                    Text {
+                        text: "الإعدادات";
+                        color: Theme.text;
+                        font-size: 28px;
+                        font-weight: 800;
+                        horizontal-alignment: right;
+                    }
+
+                    Rectangle {
+                        background: Theme.surface;
+                        border-color: Theme.border;
+                        border-width: 1px;
+                        border-radius: 12px;
+
+                        VerticalLayout {
+                            padding: 24px;
+                            spacing: 16px;
+
+                            Text {
+                                text: "المظهر واللون";
+                                color: Theme.text;
+                                font-size: 18px;
+                                font-weight: 700;
+                                horizontal-alignment: right;
+                            }
+
+                            Rectangle { height: 1px; background: Theme.border; }
+
+                            HorizontalLayout {
+                                spacing: 16px;
+                                alignment: end;
+
+                                ShadcnButton { text: "الغامق"; primary: Theme.is-dark; width: 120px; clicked => { Theme.is-dark = true; } }
+                                ShadcnButton { text: "الفاتح"; primary: !Theme.is-dark; width: 120px; clicked => { Theme.is-dark = false; } }
+                            }
+                        }
+                    }
+                }
+
+                // صفحة حول (تم استدعاؤها من about.slint)
+                if !reading-mode && !show-info && root.current-tab == 2: AboutPage {
+                    open-link(url) => { root.open-link(url); }
+                }
+
+                // صفحة معلومات الكتاب
+                if show-info: Flickable {
+                    viewport-height: info-layout.preferred-height + 64px;
+                    info-layout := VerticalLayout {
+                        padding: 32px;
+                        spacing: 0;
+
+                        Rectangle {
+                            background: Theme.surface;
+                            border-color: Theme.border;
+                            border-width: 1px;
+                            border-radius: 12px;
+                            height: 120px;
+
+                            VerticalLayout {
+                                padding: 24px;
+                                spacing: 8px;
+                                alignment: center;
+
+                                Text { text: root.book-title; color: Theme.text; font-size: 24px; font-weight: 800; horizontal-alignment: center; wrap: word-wrap; }
+                                Text { text: root.book-author; color: Theme.text-muted; font-size: 14px; horizontal-alignment: center; }
+                            }
+                        }
+
+                        Rectangle { height: 24px; }
+
+                        Rectangle {
+                            background: Theme.surface;
+                            border-color: Theme.border;
+                            border-width: 1px;
+                            border-radius: 12px;
+
+                            VerticalLayout {
+                                padding-top: 16px;
+                                padding-bottom: 16px;
+                                spacing: 0;
+
+                                HorizontalLayout {
+                                    padding-right: 24px;
+                                    padding-bottom: 12px;
+                                    alignment: end;
+                                    Text { text: "البيانات الوصفية"; color: Theme.text; font-size: 15px; font-weight: 700; }
+                                }
+
+                                Rectangle { background: Theme.border; height: 1px; }
+
+                                MetadataRow { label: "العنوان";      value: root.book-title; }
+                                MetadataRow { label: "المؤلف";       value: root.book-author; }
+                                MetadataRow { label: "اللغة";        value: root.meta-language; }
+                                MetadataRow { label: "الناشر";       value: root.meta-publisher; }
+                                MetadataRow { label: "تاريخ النشر";  value: root.meta-date; }
+                                MetadataRow { label: "الموضوع";      value: root.meta-subject; }
+                                MetadataRow { label: "المعرف (ISBN)"; value: root.meta-identifier; }
+                                MetadataRow { label: "المصدر";       value: root.meta-source; }
+                                MetadataRow { label: "الحقوق";       value: root.meta-rights; }
+                                MetadataRow { label: "الصيغة";       value: root.meta-format; }
+                                MetadataRow { label: "عدد الفصول";   value: root.meta-chapters; }
+                            }
+                        }
+
+                        Rectangle { height: 24px; }
+
+                        HorizontalLayout {
+                            alignment: center;
+                            ShadcnButton { text: "العودة للقراءة →"; primary: false; width: 160px; height: 40px; clicked => { show-info = false; } }
+                        }
+                    }
+                }
+
+                // وضع القراءة
+                if reading-mode && !show-info: VerticalLayout {
+                    VerticalLayout {
+                        padding-left: 32px;
+                        padding-right: 32px;
+                        padding-top: 12px;
+                        padding-bottom: 8px;
+                        Text { text: root.book-author; color: Theme.text-muted; font-size: 12px; horizontal-alignment: center; }
+                    }
+
+                    Rectangle { height: 1px; background: Theme.border; }
+
+                    Flickable {
+                        viewport-height: content-text.preferred-height + 96px;
+                        VerticalLayout {
+                            padding-left: 48px;
+                            padding-right: 48px;
+                            padding-top: 32px;
+                            padding-bottom: 48px;
+                            content-text := Text { text: root.chapter-content; color: Theme.text; font-size: 16px; wrap: word-wrap; horizontal-alignment: right; }
+                        }
+                    }
+
+                    Rectangle { height: 1px; background: Theme.border; }
+
+                    HorizontalLayout {
+                        padding-left: 24px;
+                        padding-right: 24px;
+                        padding-top: 10px;
+                        padding-bottom: 10px;
+                        alignment: space-between;
+                        height: 52px;
+
+                        ShadcnButton { text: "← التالي"; primary: false; width: 100px; height: 32px; disabled: !root.can-go-next; clicked => { root.go-next-chapter() } }
+
+                        HorizontalLayout {
+                            spacing: 6px;
+                            alignment: center;
+
+                            chapter-display := TouchArea {
+                                visible: !root.editing-chapter;
+                                width: self.visible ? chapter-label.preferred-width + 16px : 0;
+                                height: 32px;
+                                clicked => { root.editing-chapter = true; chapter-input.text = root.current-chapter-num; chapter-input.focus(); chapter-input.select-all(); }
+
+                                Rectangle {
+                                    background: ta-hover.has-hover ? Theme.button-bg : transparent;
+                                    border-radius: 6px;
+                                    border-color: ta-hover.has-hover ? Theme.border : transparent;
+                                    border-width: 1px;
+
+                                    ta-hover := TouchArea {
+                                        mouse-cursor: pointer;
+                                        clicked => { root.editing-chapter = true; chapter-input.text = root.current-chapter-num; chapter-input.focus(); chapter-input.select-all(); }
+                                    }
+
+                                    chapter-label := Text { text: "  الفصل " + root.current-chapter-num + " من " + root.chapter-count + "  "; color: Theme.text-muted; font-size: 12px; vertical-alignment: center; horizontal-alignment: center; }
+                                }
+                            }
+
+                            Rectangle {
+                                visible: root.editing-chapter;
+                                width: root.editing-chapter ? 55px : 0;
+                                height: 28px;
+                                background: Theme.button-bg;
+                                border-color: Theme.border;
+                                border-width: 1px;
+                                border-radius: 4px;
+
+                                chapter-input := TextInput { text: root.current-chapter-num; color: Theme.text; font-size: 13px; input-type: number; horizontal-alignment: center; vertical-alignment: center; accepted => { root.go-to-chapter(round(self.text.to-float())); root.editing-chapter = false; root.dropdown-open = false; } }
+                            }
+
+                            Text { visible: root.editing-chapter; text: "من " + root.chapter-count; color: Theme.text-muted; font-size: 12px; vertical-alignment: center; }
+
+                            Rectangle {
+                                visible: root.editing-chapter;
+                                width: root.editing-chapter ? 28px : 0;
+                                height: 28px;
+                                background: dropdown-ta.has-hover ? Theme.border : Theme.button-bg;
+                                border-color: Theme.border;
+                                border-width: 1px;
+                                border-radius: 4px;
+
+                                dropdown-ta := TouchArea { mouse-cursor: pointer; clicked => { root.dropdown-open = !root.dropdown-open; } }
+
+                                Text { text: root.dropdown-open ? "▲" : "▼"; color: Theme.text-muted; font-size: 9px; horizontal-alignment: center; vertical-alignment: center; }
+                            }
+                        }
+
+                        ShadcnButton { text: "السابق →"; primary: false; width: 100px; height: 32px; disabled: !root.can-go-prev; clicked => { root.go-prev-chapter() } }
+                    }
+                }
+            }
+
+            // شريط التنقل السفلي
+            if !reading-mode && !show-info: VerticalLayout {
+                Rectangle { height: 1px; background: Theme.border; }
+                
+                Rectangle {
+                    height: 64px;
+                    background: Theme.surface;
+                    
+                    HorizontalLayout {
+                        padding-left: 24px;
+                        padding-right: 24px;
+                        padding-top: 10px;
+                        padding-bottom: 10px;
+                        spacing: 16px;
+                        alignment: center;
+                        
+                        TabButton { text: "حول"; active: root.current-tab == 2; clicked => { root.current-tab = 2; } width: 140px; }
+                        TabButton { text: "الإعدادات"; active: root.current-tab == 1; clicked => { root.current-tab = 1; } width: 140px; }
+                        TabButton { text: "الرئيسية"; active: root.current-tab == 0; clicked => { root.current-tab = 0; } width: 140px; }
+                    }
+                }
+            }
+        }
+
+        // الطبقة الشفافة للقارئ
+        if root.editing-chapter && !root.dropdown-open: Rectangle {
+            width: 100%; height: parent.height - 53px; y: 0; background: transparent;
+            TouchArea { clicked => { root.editing-chapter = false; } }
+        }
+
+        // قائمة الفصول المنسدلة
+        if root.dropdown-open: Rectangle {
+            width: 100%; height: 100%; background: Theme.is-dark ? #00000080 : #00000030;
+            TouchArea { clicked => { root.dropdown-open = false; root.editing-chapter = false; } }
+
+            Rectangle {
+                x: (parent.width - 120px) / 2;
+                y: parent.height - 58px - min(root.chapter-count * 34px, 340px);
+                width: 120px; height: min(root.chapter-count * 34px, 340px);
+                background: Theme.surface; border-color: Theme.border; border-width: 1px; border-radius: 8px; clip: true;
+
+                Flickable {
+                    viewport-height: root.chapter-count * 34px;
+                    VerticalLayout {
+                        padding-top: 4px; padding-bottom: 4px;
+                        for idx in root.chapter-count: Rectangle {
+                            height: 34px; background: (idx + 1 == root.current-chapter-num) ? Theme.border : (item-ta.has-hover ? Theme.button-bg : transparent); border-radius: 4px;
+                            item-ta := TouchArea { mouse-cursor: pointer; clicked => { root.go-to-chapter(idx + 1); root.dropdown-open = false; root.editing-chapter = false; } }
+                            HorizontalLayout { padding-left: 12px; padding-right: 12px; alignment: center; Text { text: idx + 1; color: (idx + 1 == root.current-chapter-num) ? Theme.text : Theme.text-muted; font-size: 13px; font-weight: (idx + 1 == root.current-chapter-num) ? 700 : 400; horizontal-alignment: center; vertical-alignment: center; } }
+                        }
+                    }
+                }
+                if root.chapter-count > 10: Rectangle { x: parent.width - 5px; y: 4px; width: 3px; height: parent.height - 8px; background: Theme.border; border-radius: 2px; }
+            }
+        }
+    }
+}
