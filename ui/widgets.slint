@@ -1,0 +1,163 @@
+import { Theme } from "theme.slint";
+
+// عنصر زر مخصص
+export component ShadcnButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> primary: true;
+    in property <bool> disabled: false;
+    callback clicked;
+
+    background: disabled ? (Theme.is-dark ? #1a1a1d : #e4e4e7) : (primary ? Theme.primary-bg : Theme.button-bg);
+    border-color: disabled ? Theme.border : (primary ? Theme.primary-bg : Theme.border);
+    border-width: 1px;
+    border-radius: 6px;
+    height: 36px;
+    opacity: disabled ? 0.5 : 1.0;
+    
+    TouchArea {
+        enabled: !root.disabled;
+        clicked => { root.clicked() }
+    }
+
+    Text {
+        text: root.text;
+        color: disabled ? Theme.text-muted : (primary ? Theme.primary-text : Theme.text);
+        font-size: 13px;
+        font-weight: 600;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+}
+
+// زر أيقونة دائري
+export component IconButton inherits Rectangle {
+    callback clicked;
+    in property <image> icon;
+
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: ta.has-hover ? Theme.border : transparent;
+
+    ta := TouchArea {
+        clicked => { root.clicked() }
+    }
+
+    Image {
+        source: root.icon;
+        width: 20px;
+        height: 20px;
+        colorize: ta.has-hover ? Theme.text : Theme.text-muted;
+    }
+}
+
+// زر التبويبات السفلية (Navigation Tabs)
+export component TabButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> active;
+    callback clicked;
+    
+    background: active ? Theme.border : transparent;
+    border-radius: 8px;
+    
+    TouchArea {
+        clicked => { root.clicked() }
+    }
+    Text {
+        text: root.text;
+        color: active ? Theme.text : Theme.text-muted;
+        font-size: 14px;
+        font-weight: active ? 700 : 500;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+}
+
+// بطاقة كتاب
+export component BookCard inherits Rectangle {
+    in property <string> title;
+    in property <string> author;
+    in property <string> date;
+    
+    background: Theme.surface;
+    border-color: Theme.border;
+    border-width: 1px;
+    border-radius: 12px;
+    min-width: 200px;
+    
+    VerticalLayout {
+        padding: 20px;
+        spacing: 12px;
+        
+        Text {
+            text: root.title;
+            color: Theme.text;
+            font-size: 16px;
+            font-weight: 700;
+            overflow: elide;
+            horizontal-alignment: right;
+        }
+        
+        Text {
+            text: root.author;
+            color: Theme.text-muted;
+            font-size: 12px;
+            overflow: elide;
+            horizontal-alignment: right;
+        }
+        
+        Rectangle { background: Theme.border; height: 1px; }
+        
+        HorizontalLayout {
+            alignment: space-between;
+            ShadcnButton {
+                text: "فتح";
+                primary: false;
+                width: 60px;
+                height: 28px;
+            }
+            Text {
+                text: root.date;
+                color: Theme.text-muted;
+                font-size: 11px;
+                vertical-alignment: center;
+            }
+        }
+    }
+}
+
+// سطر معلومات
+export component MetadataRow inherits Rectangle {
+    in property <string> label;
+    in property <string> value;
+
+    visible: root.value != "";
+    height: root.value != "" ? 48px : 0;
+    background: transparent;
+
+    HorizontalLayout {
+        padding-left: 24px;
+        padding-right: 24px;
+        spacing: 16px;
+
+        Text {
+            text: root.value;
+            color: Theme.text;
+            font-size: 13px;
+            wrap: word-wrap;
+            vertical-alignment: center;
+            horizontal-alignment: right;
+        }
+
+        Text {
+            text: root.label;
+            color: Theme.text-muted;
+            font-size: 13px;
+            font-weight: 600;
+            min-width: 110px;
+            max-width: 110px;
+            vertical-alignment: center;
+            horizontal-alignment: right;
+        }
+    }
+}
