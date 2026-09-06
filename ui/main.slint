@@ -3,7 +3,7 @@ import { ShadcnButton, IconButton, TabButton, BookCard, MetadataRow } from "widg
 import { AboutPage } from "about.slint";
 
 export component MainWindow inherits Window {
-    title: "الشاملة المفتوحة - Open Shamela";
+    title: "المكتبة المفتوحة - OpenLibrary";
     background: Theme.bg;
     preferred-width: 1100px;
     preferred-height: 750px;
@@ -76,7 +76,7 @@ export component MainWindow inherits Window {
                         alignment: end;
 
                         Text {
-                            text: show-info ? "معلومات الكتاب" : (reading-mode ? root.book-title : (root.current-tab == 1 ? "الإعدادات" : (root.current-tab == 2 ? "حول" : "Open Shamela")));
+                            text: show-info ? "معلومات الكتاب" : (reading-mode ? root.book-title : (root.current-tab == 1 ? "الإعدادات" : (root.current-tab == 2 ? "حول" : "OpenLibrary")));
                             color: Theme.text;
                             font-size: 18px;
                             font-weight: 700;
@@ -151,13 +151,7 @@ export component MainWindow inherits Window {
                         }
                     }
 
-                    HorizontalLayout {
-                        spacing: 16px;
-                        min-height: 160px;
-                        BookCard { title: "مقدمة في ابن خلدون"; author: "عبد الرحمن بن خلدون"; date: "أضيف: اليوم"; }
-                        BookCard { title: "Clean Code"; author: "Robert C. Martin"; date: "أضيف: أمس"; }
-                        BookCard { title: "Arch Linux Wiki (Offline)"; author: "Community"; date: "أضيف: الأسبوع الماضي"; }
-                    }
+
                 }
 
                 // صفحة الإعدادات
