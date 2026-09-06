@@ -1,0 +1,30 @@
+# CMake & Build Artifacts
+build/
+CMakeFiles/
+_deps/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+install_manifest.txt
+compile_commands.json
+CMakeScripts/
+
+# Executables
+openlibrary
+openshamela
+
+# Slint and C++ Generated Files
+slint_generated_*.cpp
+slint_generated_*.h
+main.d
+main.h
+*.o
+*.obj
+*.d
+
+# OS & Editor Files
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
