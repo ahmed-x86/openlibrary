@@ -156,7 +156,7 @@ jobs:
       - name: Install System Dependencies
         run: |
           apk update
-          apk add --no-cache build-base cmake pkgconf libzip-dev rust cargo patchelf upx fontconfig-dev gtk+3.0-dev
+          apk add --no-cache build-base cmake pkgconf libzip-dev rust cargo patchelf upx fontconfig-dev gtk+3.0-dev git
 
       - name: Build Project
         run: |
