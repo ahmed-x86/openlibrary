@@ -1,0 +1,150 @@
+import { Theme } from "theme.slint";
+
+// عنصر قائمة منسدلة (Accordion) مخصص لصفحة حول
+export component Accordion inherits VerticalLayout {
+    in property <string> title;
+    in property <string> content: "";
+    property <bool> is-open: false;
+    
+    spacing: 0;
+    
+    Rectangle {
+        background: ta.has-hover ? Theme.surface : transparent;
+        height: 56px;
+        border-radius: 8px;
+        
+        ta := TouchArea {
+            clicked => { root.is-open = !root.is-open; }
+        }
+        
+        HorizontalLayout {
+            padding-left: 16px;
+            padding-right: 16px;
+            alignment: space-between;
+            
+            Text {
+                text: root.is-open ? "▲" : "▼";
+                color: Theme.text-muted;
+                font-size: 14px;
+                vertical-alignment: center;
+            }
+            
+            Text {
+                text: root.title;
+                color: Theme.text;
+                font-size: 16px;
+                font-weight: 700;
+                vertical-alignment: center;
+            }
+        }
+    }
+    
+    // التعديل هنا: إزالة if واستخدام visible و height للطي والفتح
+    Rectangle {
+        visible: root.is-open;
+        height: root.is-open ? content-layout.preferred-height : 0px;
+        clip: true; // لمنع المحتوى من التداخل عندما يكون الارتفاع صفر
+        background: Theme.surface;
+        border-radius: 8px;
+        border-color: Theme.border;
+        border-width: 1px;
+        
+        content-layout := VerticalLayout {
+            padding: 24px;
+            
+            Text {
+                visible: root.content != "";
+                text: root.content;
+                color: Theme.text-muted;
+                font-size: 14px;
+                wrap: word-wrap;
+                horizontal-alignment: right;
+            }
+            
+            @children
+        }
+    }
+}
+
+export component AboutPage inherits VerticalLayout {
+    callback open-link(string);
+    
+    padding: 32px;
+    spacing: 32px;
+    alignment: start;
+
+    Text {
+        text: "حول";
+        color: Theme.text;
+        font-size: 28px;
+        font-weight: 800;
+        horizontal-alignment: right;
+    }
+
+    Flickable {
+        viewport-height: 850px;
+        VerticalLayout {
+            spacing: 16px;
+            
+            Accordion {
+                title: "عن البرنامج";
+                content: "البرنامج هو قارئ كتب إلكترونية مفتوح المصدر صدقة جارية على روح المطور أحمد العمري.\nمازال فى مرحلة التطوير قبل النشر.\nيفتح فقط صيغة epub حتى الآن.\n\nتخليص حق: لم نسرق أي كود من أي برنامج بل بنيناه من الصفر، قد يفتح البرنامج كتباً طورها آخرون، المطور لا عليه شيء إن حمل المستخدم كتاباً عليه حقوق طبع ونشر، هذي مجرد أداة.";
+            }
+            
+            Accordion {
+                title: "عن المطور";
+                VerticalLayout {
+                    spacing: 16px;
+                    
+                    Text {
+                        text: "المطور الرئيس للمشروع اسمه أحمد العمري.";
+                        color: Theme.text-muted;
+                        font-size: 14px;
+                        wrap: word-wrap;
+                        horizontal-alignment: right;
+                    }
+                    
+                    HorizontalLayout {
+                        alignment: end;
+                        spacing: 24px;
+                        
+                        TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => { root.open-link("https://t.me/arch_gnu_linux_user") }
+                            HorizontalLayout {
+                                spacing: 8px;
+                                alignment: end;
+                                Text { text: "@arch_gnu_linux_user"; color: Theme.is-dark ? #60a5fa : #3b82f6; font-size: 14px; vertical-alignment: center; }
+                                Text { text: ""; color: Theme.text; font-size: 20px; font-family: "JetBrainsMono Nerd Font"; vertical-alignment: center; }
+                            }
+                        }
+                        
+                        TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => { root.open-link("https://github.com/ahmed-x86") }
+                            HorizontalLayout {
+                                spacing: 8px;
+                                alignment: end;
+                                Text { text: "@ahmed-86"; color: Theme.is-dark ? #60a5fa : #3b82f6; font-size: 14px; vertical-alignment: center; }
+                                Text { text: ""; color: Theme.text; font-size: 20px; font-family: "JetBrainsMono Nerd Font"; vertical-alignment: center; }
+                            }
+                        }
+                    }
+                    
+                    Text {
+                        text: "المطور يكره أنظمة التشغيل المغلقة وصعب يرفع البرنامج على google play أو app store دعماً للحرية البرمجية، لكن لأن عدد من الإخوة يستخدمون أنظمة مغلقة (اتركوا ويندوز وحولوا لينكس) يجب دعم البرنامج لكل المنصات مثل windows, mac, ios, android والأفضل طبعاً هو لينكس.\n\nالمطور لا يُصرح إذا كان أعزب أو متزوج ولا يرفع صورته الشخصية حتى لا تُفتتن البنات به.";
+                        color: Theme.text-muted;
+                        font-size: 14px;
+                        wrap: word-wrap;
+                        horizontal-alignment: right;
+                    }
+                }
+            }
+            
+            Accordion {
+                title: "الرخصة";
+                content: "رخصة \"وقف\" العامة\nبسم الله الرّحمن الرّحيم\n\nرخصة وقف العامة الإصدار 2.0، 3 محرم 1435\n\nالتمهيد\n\nهذه الوثيقة هي الاتفاقية الحاكمة لاستخدام المواد التي تغطيها، حيث تُعتبر العقد المُبرم بين الناشر والمستفيد. نحن نرى أن الاتفاقيات الاحتكارية لا تقيد المستفيد فحسب، بل تؤثر على قيمة العمل الفكري، وتحوله من نور إلى مجرد سلعة يُمتلك فيها حق الملكية الفكرية للمودع الفكري الأول. رؤيتنا تقتصر على الشكل المعنوي للعمل الفكري نفسه وفقاً للقواعد أدناه، بخلاف الرخص الاحتكارية التي تضع قيوداً مجحفة.\n\nلدينا رؤية مختلفة، فنحن نقدم عملنا (مثل البرمجيات) ابتغاء مرضاة الله، وهذا هو ركيزة هذه الرخصة التي تميزها عن الرخص الاحتكارية. أي نية أخرى (مثل نشر المعرفة أو تحقيق الأرباح) يجب أن تتحقق بطرق لا تتعارض مع هدفنا الأخلاقي الأساسي.\n\nوفقاً لمعتقداتنا (والتي لا نفرضها على أحد) فإن الإسلام يحرم الاحتكار وكتمان العلم بشكل عام، وهذا ينبع من:\n- الحديث الصحيح: \"مَن سُئِلَ عَن عِلمٍ فَكَتَمَهُ، أُلجِمَ يَومَ القِيامَةِ بِلِجامٍ مِن نارٍ.\"\n- حدد الفقه الإسلامي ما يمكن تملكه، والقواعد لا تنطبق على الأفكار لأنها ليست شيئاً ملموساً ومحدوداً، وتقريباً جميع شروط الاتفاقيات الاحتكارية تندرج تحت حكم \"الغرر\" المحرم.\n- كتمان العلم النافع عمن يحتاجه يلحق ضرراً بالناس مقابل مكاسب دنيوية لأفراد قلائل، وهذا لا يبرره الشرع إذ \"لا ضرر ولا ضرار\".\n- ما يسمى بـ \"الملكية الفكرية\" يتمحور حول إعطاء المُلّاك الحق في منع ما أحله الله لكسب المال، وليس بتقديم خدمة أو سلع.\n\nنحن في \"وقف\" نهتم بمصلحة عامة الناس. ولا نغفل عن مصلحة صاحب العمل في نيل الأجر من الله تعالى. نعتقد أن حقوق النشر والتوزيع \"ممنوحة\" وليست \"محفوظة\".\n- أولاً: فضل وحقوق صاحب العمل الأخلاقية محفوظة ومعترف بها.\n- ثانياً: يحق للمؤلف الأصلي وأي طرف آخر تقاضي أجور على تحسين العمل أو تطويره أو تقديم خدمات مدفوعة... إلخ، ولكن ليس على العمل في شكله غير الملموس.\n\nالتعريفات\n- العمل الفكري: هو أي منتج فكري غير ملموس ونافع يمكن تمريره للآخرين أو نسخه دون تكلفة على المؤلف الأصلي.\n- الحامل (أو المطور): هو المؤلف المبدع أو الجهة التي قامت بتطوير العمل وجعله متاحاً.\n- المرخص له أو المستخدم: أي شخص أو جهة تستخدم العمل.\n- الرخصة: هذه الاتفاقية بين الطرفين وتُطبق بمجرد استخدام المنتج بأي شكل.\n\nالشروط\nكما يوحي الاسم \"وقف\"، يعلن الحامل أن عمله أُنتج وجُعل متاحاً للعامة لوجه الله كصدقة جارية.\nتمنح \"وقف\" المستخدمين الحق في الاستفادة من العمل بالتشغيل والنسخ وإعادة التوزيع وحتى التطوير وفقاً لما يلي:\n\n1. التمهيد والتعريفات تعتبر جزءاً لا يتجزأ من هذه الرخصة.\n2. الاستخدام: يحق للمستخدم استخدام العمل لأي غرض، وينصح الحامل بعدم استخدامه في الإضرار بالآخرين أو مخالفة مبادئ الإسلام، والحامل غير مسؤول عن أي انتهاكات.\n3. التغطية: يمكن أن تغطي رخصة وقف الأعمال المنشورة برخص أخرى لا تتعارض معها.\n4. الحد الزمني: الرخصة غير مقيدة بوقت، وكل استخدام للعمل يعتبر تاريخاً جديداً للموافقة.\n5. إعادة التوزيع: يحق للمستخدم إعادة توزيع العمل غير المعدل بأي كمية، مع الاعتراف بفضل صاحب العمل.\n6. التعديلات: يحق للمستخدم الحصول على المصدر وإجراء تعديلات.\n7. توزيع التعديلات: يمكن للمستخدم توزيع التعديلات تحت هذه الرخصة فقط بشرط الإشارة للعمل الأصلي.\n8. إخلاء المسؤولية: لا يتحمل الحامل أي مسؤولية قانونية أو أخلاقية عن الأضرار. يُقدم هذا العمل \"كما هو\"، والمسؤولية الكاملة تقع على المستخدم.";
+            }
+        }
+    }
+}
