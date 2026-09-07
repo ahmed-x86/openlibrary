@@ -19,14 +19,13 @@ android {
             }
         }
         ndk {
-            // المعماريات التي سيتم دمجها في الـ Universal APK
-            abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64'
+            // ✅ تم إضافة x86 هنا حتى لا يتخطى Gradle بناء هذه المعمارية
+            abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64', 'x86'
         }
     }
 
     signingConfigs {
         release {
-            // يتم سحب هذه القيم برمجياً من بيئة GitHub Actions
             storeFile file(System.getenv("KEYSTORE_PATH") ?: "keystore.jks")
             storePassword System.getenv("KEYSTORE_PASSWORD") ?: ""
             keyAlias System.getenv("KEY_ALIAS") ?: ""
@@ -44,7 +43,6 @@ android {
 
     externalNativeBuild {
         cmake {
-            // الرجوع للخلف للوصول لملف CMakeLists.txt الموجود في جذر المشروع
             path "../../CMakeLists.txt"
             version "3.22.1+"
         }
