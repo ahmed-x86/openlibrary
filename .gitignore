@@ -30,3 +30,6 @@ main.h
 *.swo
 
 release.py
+keystore_base64.txt
+openlibrary-release.keystore
+push_release.py

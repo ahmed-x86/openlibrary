@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.ahmed_x86.openlibrary">
+
+    <application
+        android:allowBackup="true"
+        android:label="OpenLibrary"
+        android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
+        
+        <!-- تشغيل C++ Native Activity بشكل مباشر -->
+        <activity android:name="android.app.NativeActivity"
+            android:exported="true"
+            android:configChanges="orientation|keyboardHidden|screenSize">
+            
+            <meta-data android:name="android.app.lib_name"
+                android:value="openlibrary" />
+                
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

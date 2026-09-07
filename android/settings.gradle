@@ -1,0 +1,2 @@
+rootProject.name = "OpenLibrary"
+include ':app'

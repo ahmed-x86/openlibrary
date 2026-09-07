@@ -75,12 +75,20 @@ set(NFD_INSTALL OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(nfd)
 
 # ============================================================
-# الملف التنفيذي
+# الملف التنفيذي أو المكتبة (حسب النظام)
 # ============================================================
-add_executable(openlibrary
-    src/main.cpp
-    src/epub_reader.cpp
-)
+if (ANDROID)
+    # أندرويد يتطلب بناء C++ كمكتبة ديناميكية (Shared Library)
+    add_library(openlibrary SHARED
+        src/main.cpp
+        src/epub_reader.cpp
+    )
+else()
+    add_executable(openlibrary
+        src/main.cpp
+        src/epub_reader.cpp
+    )
+endif()
 
 # تجميع ملف الواجهة (.slint) وتحويله إلى كود C++
 slint_target_sources(openlibrary ui/main.slint)
@@ -95,5 +103,9 @@ endif()
 target_link_libraries(openlibrary PRIVATE
     Slint::Slint
     pugixml
-    nfd
 )
+
+# مكتبة nativefiledialog (nfd) لا تدعم أندرويد، فنستثنيها عند البناء له
+if (NOT ANDROID)
+    target_link_libraries(openlibrary PRIVATE nfd)
+endif()

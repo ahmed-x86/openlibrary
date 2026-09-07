@@ -1,0 +1,52 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.ahmed_x86.openlibrary'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.ahmed_x86.openlibrary"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+
+        externalNativeBuild {
+            cmake {
+                cppFlags "-std=c++20"
+            }
+        }
+        ndk {
+            // المعماريات التي سيتم دمجها في الـ Universal APK
+            abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64'
+        }
+    }
+
+    signingConfigs {
+        release {
+            // يتم سحب هذه القيم برمجياً من بيئة GitHub Actions
+            storeFile file(System.getenv("KEYSTORE_PATH") ?: "keystore.jks")
+            storePassword System.getenv("KEYSTORE_PASSWORD") ?: ""
+            keyAlias System.getenv("KEY_ALIAS") ?: ""
+            keyPassword System.getenv("KEY_PASSWORD") ?: ""
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            // الرجوع للخلف للوصول لملف CMakeLists.txt الموجود في جذر المشروع
+            path "../../CMakeLists.txt"
+            version "3.22.1+"
+        }
+    }
+}
