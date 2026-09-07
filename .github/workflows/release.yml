@@ -560,8 +560,7 @@ jobs:
         with:
           gradle-version: '8.4'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      # تم حذف setup-android من هنا لتسريع البناء لأن خوادم Ubuntu تمتلك SDK جاهز
 
       - name: Setup Android NDK
         uses: nttld/setup-ndk@v1
@@ -591,9 +590,15 @@ jobs:
           cd android
           gradle assembleRelease
 
+      # تم تعديل أمر البحث ليكون ذكياً ولن يفشل أبداً طالما الـ APK موجود
       - name: Find and Copy APK
         run: |
-          find android/app/build/outputs/apk/release -name "*.apk" ! -name "*unaligned*" -exec cp {} OpenLibrary-Android.apk \;
+          APK_PATH=$(find android -type f -name "*.apk" | grep -v "unaligned" | head -n 1)
+          if [ -z "$APK_PATH" ]; then
+            echo "::error::لم يتم إيجاد ملف APK!"
+            exit 1
+          fi
+          cp "$APK_PATH" OpenLibrary-Android.apk
 
       - name: Upload Android Artifact
         uses: actions/upload-artifact@v4
@@ -632,8 +637,7 @@ jobs:
         with:
           gradle-version: '8.4'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      # تم حذف setup-android من هنا لتسريع البناء
 
       - name: Setup Android NDK
         uses: nttld/setup-ndk@v1
@@ -652,7 +656,6 @@ jobs:
         run: |
           echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
 
-      # استخدام ميزة android.injected.build.abi لتوجيه Gradle لبناء معمارية واحدة فقط
       - name: Build APK (${{ matrix.arch }})
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
@@ -666,7 +669,12 @@ jobs:
 
       - name: Find and Copy APK
         run: |
-          find android/app/build/outputs/apk/release -name "*.apk" ! -name "*unaligned*" -exec cp {} OpenLibrary-Android-${{ matrix.arch }}.apk \;
+          APK_PATH=$(find android -type f -name "*.apk" | grep -v "unaligned" | head -n 1)
+          if [ -z "$APK_PATH" ]; then
+            echo "::error::لم يتم إيجاد ملف APK!"
+            exit 1
+          fi
+          cp "$APK_PATH" OpenLibrary-Android-${{ matrix.arch }}.apk
 
       - name: Upload Android Artifact
         uses: actions/upload-artifact@v4
