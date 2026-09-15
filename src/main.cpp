@@ -1,7 +1,11 @@
 #include "main.h" // هذا الملف يتم توليده تلقائياً بواسطة CMake و Slint
 #include "epub_reader.h"
 
+// مكتبة nfd (Native File Dialog) لا تدعم أندرويد إطلاقًا، ولا يتم جلبها/بناؤها
+// له أصلاً (راجع CMakeLists.txt)، لذلك يجب عدم تضمين هيدرها في بناء أندرويد.
+#ifndef ANDROID
 #include <nfd.hpp>
+#endif
 #include <iostream>
 #include <memory>
 #include <string>
@@ -52,6 +56,7 @@ int main() {
     ui->on_open_epub_dialog([&ui, &reader, &updateReaderUI]() {
         std::cout << "[Action] فتح مدير الملفات لاختيار كتاب EPUB..." << std::endl;
 
+#ifndef ANDROID
         NFD::Guard nfdGuard;
         nfdfilteritem_t filterItems[1] = {{"EPUB Books", "epub"}};
         NFD::UniquePath outPath;
@@ -74,6 +79,12 @@ int main() {
         } else {
             std::cerr << "[Error] خطأ في مدير الملفات: " << NFD::GetError() << std::endl;
         }
+#else
+        // TODO: مكتبة nfd لا تدعم أندرويد. لازم نضيف اختيار ملفات حقيقي هنا
+        // لاحقًا عبر Storage Access Framework (SAF) من خلال JNI. حاليًا بنسجل
+        // تحذير بس عشان بناء أندرويد ينجح ولحد ما تتضاف الميزة دي فعليًا.
+        std::cerr << "[Warning] اختيار الملفات غير مدعوم حاليًا على أندرويد." << std::endl;
+#endif
     });
 
     // ============================================================
