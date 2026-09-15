@@ -10,6 +10,7 @@
 #include <memory>
 #include <string>
 #include <cstdlib> 
+#include <optional> // تمت الإضافة لدعم التغليف والتأخير في تهيئة المتغير
 
 #ifdef __ANDROID__
 #include <jni.h>
@@ -17,35 +18,37 @@ static JavaVM* g_jvm = nullptr;
 static jobject g_activity = nullptr;
 #endif
 
-// مؤشرات عامة لكي نستطيع الوصول للواجهة والقارئ من داخل JNI (أندرويد)
-static std::shared_ptr<MainWindow> g_ui;
+// استخدام std::optional لتأخير تهيئة واجهة Slint وجعلها متوافقة مع C++
+static std::optional<slint::ComponentHandle<MainWindow>> g_ui;
 static std::shared_ptr<EpubReader> g_reader;
 
 // دالة تحديث الواجهة عامة
 void updateReaderUI() {
     if (!g_ui || !g_reader) return;
+    
     const auto& meta = g_reader->getMetadata();
+    auto& ui = *g_ui; // أخذ مرجع (Reference) لتسهيل الكود وتجنب التكرار
     
-    g_ui->set_book_title(slint::SharedString(meta.title));
-    g_ui->set_book_author(slint::SharedString(meta.author));
-    g_ui->set_chapter_content(slint::SharedString(g_reader->getCurrentChapterContent()));
+    ui->set_book_title(slint::SharedString(meta.title));
+    ui->set_book_author(slint::SharedString(meta.author));
+    ui->set_chapter_content(slint::SharedString(g_reader->getCurrentChapterContent()));
     
-    g_ui->set_current_chapter_num(g_reader->getCurrentChapterIndex() + 1);
-    g_ui->set_chapter_count(g_reader->getChapterCount());
+    ui->set_current_chapter_num(g_reader->getCurrentChapterIndex() + 1);
+    ui->set_chapter_count(g_reader->getChapterCount());
     
-    g_ui->set_can_go_next(g_reader->getCurrentChapterIndex() + 1 < g_reader->getChapterCount());
-    g_ui->set_can_go_prev(g_reader->getCurrentChapterIndex() > 0);
+    ui->set_can_go_next(g_reader->getCurrentChapterIndex() + 1 < g_reader->getChapterCount());
+    ui->set_can_go_prev(g_reader->getCurrentChapterIndex() > 0);
     
-    g_ui->set_meta_language(slint::SharedString(meta.language));
-    g_ui->set_meta_publisher(slint::SharedString(meta.publisher));
-    g_ui->set_meta_date(slint::SharedString(meta.date));
-    g_ui->set_meta_description(slint::SharedString(meta.description));
-    g_ui->set_meta_subject(slint::SharedString(meta.subject));
-    g_ui->set_meta_rights(slint::SharedString(meta.rights));
-    g_ui->set_meta_identifier(slint::SharedString(meta.identifier));
-    g_ui->set_meta_source(slint::SharedString(meta.source));
-    g_ui->set_meta_format(slint::SharedString(meta.format));
-    g_ui->set_meta_chapters(slint::SharedString(std::to_string(meta.chapterCount)));
+    ui->set_meta_language(slint::SharedString(meta.language));
+    ui->set_meta_publisher(slint::SharedString(meta.publisher));
+    ui->set_meta_date(slint::SharedString(meta.date));
+    ui->set_meta_description(slint::SharedString(meta.description));
+    ui->set_meta_subject(slint::SharedString(meta.subject));
+    ui->set_meta_rights(slint::SharedString(meta.rights));
+    ui->set_meta_identifier(slint::SharedString(meta.identifier));
+    ui->set_meta_source(slint::SharedString(meta.source));
+    ui->set_meta_format(slint::SharedString(meta.format));
+    ui->set_meta_chapters(slint::SharedString(std::to_string(meta.chapterCount)));
 }
 
 #ifdef __ANDROID__
@@ -72,8 +75,8 @@ Java_com_ahmed_1x86_openlibrary_MainActivity_onFileSelected(JNIEnv *env, jobject
         if (g_reader->open(path)) {
             std::cout << "[Success] تم فتح الكتاب بنجاح على أندرويد!" << std::endl;
             updateReaderUI();
-            g_ui->set_reading_mode(true);
-            g_ui->set_show_info(false);
+            (*g_ui)->set_reading_mode(true);
+            (*g_ui)->set_show_info(false);
         } else {
             std::cerr << "[Error] فشل فتح الملف على أندرويد: " << path << std::endl;
         }
@@ -89,8 +92,9 @@ int main(int argc, char* argv[])
 {
     g_ui = MainWindow::create();
     g_reader = std::make_shared<EpubReader>();
+    auto& ui = *g_ui; // مرجع محلي للتعامل مع الواجهة داخل main
 
-    g_ui->on_open_epub_dialog([]() {
+    ui->on_open_epub_dialog([]() {
 #ifndef __ANDROID__
         NFD::Guard nfdGuard;
         nfdfilteritem_t filterItems[1] = {{"EPUB Books", "epub"}};
@@ -101,8 +105,8 @@ int main(int argc, char* argv[])
             std::string filePath = outPath.get();
             if (g_reader->open(filePath)) {
                 updateReaderUI();
-                g_ui->set_reading_mode(true);
-                g_ui->set_show_info(false);
+                (*g_ui)->set_reading_mode(true);
+                (*g_ui)->set_show_info(false);
             }
         }
 #else
@@ -122,15 +126,15 @@ int main(int argc, char* argv[])
 #endif
     });
 
-    g_ui->on_go_next_chapter([]() {
+    ui->on_go_next_chapter([]() {
         if (g_reader->nextChapter()) updateReaderUI();
     });
 
-    g_ui->on_go_prev_chapter([]() {
+    ui->on_go_prev_chapter([]() {
         if (g_reader->prevChapter()) updateReaderUI();
     });
 
-    g_ui->on_go_to_chapter([](int target_chapter) {
+    ui->on_go_to_chapter([](int target_chapter) {
         int max_chapters = g_reader->getChapterCount();
         if (target_chapter < 1) target_chapter = 1;
         if (target_chapter > max_chapters) target_chapter = max_chapters;
@@ -142,13 +146,13 @@ int main(int argc, char* argv[])
         }
     });
 
-    g_ui->on_go_back_home([]() {
-        g_ui->set_reading_mode(false);
-        g_ui->set_show_info(false);
+    ui->on_go_back_home([]() {
+        (*g_ui)->set_reading_mode(false);
+        (*g_ui)->set_show_info(false);
         g_reader->close();
     });
 
-    g_ui->on_open_link([](slint::SharedString url) {
+    ui->on_open_link([](slint::SharedString url) {
         std::string url_str(url);
 #if defined(_WIN32)
         std::string cmd = "start " + url_str;
@@ -167,13 +171,13 @@ int main(int argc, char* argv[])
         std::string filePath = argv[1];
         if (g_reader->open(filePath)) {
             updateReaderUI();
-            g_ui->set_reading_mode(true);
-            g_ui->set_show_info(false);
+            ui->set_reading_mode(true);
+            ui->set_show_info(false);
         }
     }
 #endif
 
-    g_ui->run();
+    ui->run();
 
 #ifndef __ANDROID__
     return 0;
