@@ -53,6 +53,11 @@ if (NOT LIBZIP_FOUND)
     set(ENABLE_LZMA OFF CACHE BOOL "" FORCE)
     set(ENABLE_ZSTD OFF CACHE BOOL "" FORCE)
     set(ENABLE_OPENSSL OFF CACHE BOOL "" FORCE)
+    # نوقف خطوة install/export الخاصة بـ libzip لأننا نستخدمها كمكتبة ثابتة مدمجة فقط
+    # ولا نحتاج تثبيتها؛ بدون هذا السطر يفشل CMake Generate لأن target "zip" يحاول
+    # يصدّر export set بيحتاج target "zlibstatic" وهو غير موجود في أي export set
+    # (لأننا جلبنا zlib بأنفسنا عبر FetchContent بدون تثبيته رسميًا).
+    set(LIBZIP_DO_INSTALL OFF CACHE BOOL "" FORCE)
     FetchContent_MakeAvailable(libzip)
 endif()
 
