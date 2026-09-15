@@ -124,3 +124,37 @@ target_link_libraries(openlibrary PRIVATE
 if (NOT ANDROID)
     target_link_libraries(openlibrary PRIVATE nfd)
 endif()
+
+# ============================================================
+# Installation
+# ============================================================
+if (NOT ANDROID)
+    install(TARGETS openlibrary DESTINATION bin)
+    if (UNIX AND NOT APPLE)
+        install(FILES openlibrary.desktop DESTINATION share/applications)
+        # Assuming icon will be downloaded to assets/icon.png during build
+        install(FILES assets/icon.png DESTINATION share/pixmaps RENAME openlibrary.png)
+    endif()
+endif()
+
+# ============================================================
+# CPack Packaging
+# ============================================================
+set(CPACK_PACKAGE_NAME "openlibrary")
+set(CPACK_PACKAGE_VERSION "1.0.0")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Open Source EPUB Reader")
+set(CPACK_PACKAGE_CONTACT "ahmed-x86")
+
+if (WIN32)
+    set(CPACK_GENERATOR "NSIS;ZIP")
+    set(CPACK_NSIS_EXTRA_INSTALL_COMMANDS "
+        WriteRegStr HKCR \\\".epub\\\" \\\"\\\" \\\"OpenLibrary.EPUB\\\"
+        WriteRegStr HKCR \\\"OpenLibrary.EPUB\\\\shell\\\\open\\\\command\\\" \\\"\\\" \\\"\\\\\\\"$INSTDIR\\\\openlibrary.exe\\\\\\\" \\\\\\\"%1\\\\\\\"\\\"
+    ")
+elseif (UNIX AND NOT APPLE AND NOT ANDROID)
+    set(CPACK_GENERATOR "DEB;RPM")
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS "fontconfig, libgtk-3-0")
+    set(CPACK_RPM_PACKAGE_REQUIRES "fontconfig, gtk3")
+endif()
+
+include(CPack)

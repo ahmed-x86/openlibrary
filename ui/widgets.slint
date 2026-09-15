@@ -16,6 +16,7 @@ export component ShadcnButton inherits Rectangle {
     
     TouchArea {
         enabled: !root.disabled;
+        mouse-cursor: pointer;
         clicked => { root.clicked() }
     }
 

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=OpenLibrary
+Comment=Open Source EPUB Reader
+Exec=openlibrary %f
+Icon=openlibrary
+Terminal=false
+Categories=Education;Literature;Viewer;
+MimeType=application/epub+zip;

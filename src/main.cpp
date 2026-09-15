@@ -14,7 +14,7 @@
 #ifdef __ANDROID__
 extern "C" void slint_main()
 #else
-int main()
+int main(int argc, char* argv[])
 #endif
 {
     // إنشاء نسخة من النافذة الرئيسية
@@ -158,6 +158,21 @@ int main()
 #endif
         std::system(cmd.c_str());
     });
+
+#ifndef __ANDROID__
+    // معالجة تمرير الملف من سطر الأوامر
+    if (argc > 1) {
+        std::string filePath = argv[1];
+        if (reader->open(filePath)) {
+            std::cout << "[Action] تم فتح الملف من سطر الأوامر: " << filePath << std::endl;
+            updateReaderUI();
+            ui->set_reading_mode(true);
+            ui->set_show_info(false);
+        } else {
+            std::cerr << "[Error] فشل فتح الملف الممرر: " << filePath << std::endl;
+        }
+    }
+#endif
 
     // تشغيل التطبيق
     ui->run();
