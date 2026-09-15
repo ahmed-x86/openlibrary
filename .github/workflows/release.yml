@@ -23,7 +23,7 @@ jobs:
       - name: Install System Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake build-essential pkg-config libzip-dev patchelf upx-ucl libfontconfig1-dev libgtk-3-dev
+          sudo apt-get install -y cmake build-essential pkg-config patchelf upx-ucl libfontconfig1-dev libgtk-3-dev
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -37,7 +37,7 @@ jobs:
         run: |
           mkdir -p staging
           cp build/openlibrary staging/
-          find build/ -name "*.so*" \( -type f -o -type l \) -exec cp -a {} staging/ \;
+          find build/ \( -name "libnfd.so*" -o -name "libpugixml.so*" -o -name "libslint_cpp.so*" \) -exec cp -a {} staging/ \;
           echo "=== Staged files ==="
           ls -la staging/
 
@@ -111,7 +111,7 @@ jobs:
           mkdir -p "${PKG_ROOT}/usr/share/icons/hicolor/256x256/apps"
 
           cp openlibrary-bin "${PKG_ROOT}/usr/bin/openlibrary"
-          find build-src/ -name "*.so*" \( -type f -o -type l \) -exec cp -a {} "${PKG_ROOT}/usr/lib/openlibrary/" \;
+          find build-src/ \( -name "libnfd.so*" -o -name "libpugixml.so*" -o -name "libslint_cpp.so*" \) -exec cp -a {} "${PKG_ROOT}/usr/lib/openlibrary/" \;
 
           cat > "${PKG_ROOT}/DEBIAN/control" <<EOF
           Package: openlibrary
@@ -142,7 +142,7 @@ jobs:
 
           mkdir -p rpmbuild/SOURCES/openlibrary-1.0.0
           cp openlibrary-bin rpmbuild/SOURCES/openlibrary-1.0.0/openlibrary
-          find build-src/ -name "*.so*" \( -type f -o -type l \) -exec cp -a {} rpmbuild/SOURCES/openlibrary-1.0.0/ \;
+          find build-src/ \( -name "libnfd.so*" -o -name "libpugixml.so*" -o -name "libslint_cpp.so*" \) -exec cp -a {} rpmbuild/SOURCES/openlibrary-1.0.0/ \;
           tar -czf rpmbuild/SOURCES/openlibrary-1.0.0.tar.gz -C rpmbuild/SOURCES openlibrary-1.0.0
 
           cat > rpmbuild/SPECS/openlibrary.spec <<'SPEC'
@@ -194,7 +194,7 @@ jobs:
       - name: Install System Dependencies
         run: |
           apk update
-          apk add --no-cache build-base cmake pkgconf libzip-dev rust cargo patchelf upx fontconfig-dev gtk+3.0-dev git ninja
+          apk add --no-cache build-base cmake pkgconf rust cargo patchelf upx fontconfig-dev gtk+3.0-dev git ninja
 
       - name: Build Project
         run: |
@@ -205,7 +205,7 @@ jobs:
         run: |
           mkdir -p staging
           cp build/openlibrary staging/
-          find build/ -name "*.so*" \( -type f -o -type l \) -exec cp -a {} staging/ \;
+          find build/ \( -name "libnfd.so*" -o -name "libpugixml.so*" -o -name "libslint_cpp.so*" \) -exec cp -a {} staging/ \;
           echo "=== Staged files ==="
           ls -la staging/
 
@@ -276,7 +276,7 @@ jobs:
           mkdir -p "${PKG_ROOT}/usr/lib/openlibrary"
 
           cp openlibrary-bin "${PKG_ROOT}/usr/bin/openlibrary"
-          find build-src/ -name "*.so*" \( -type f -o -type l \) -exec cp -a {} "${PKG_ROOT}/usr/lib/openlibrary/" \;
+          find build-src/ \( -name "libnfd.so*" -o -name "libpugixml.so*" -o -name "libslint_cpp.so*" \) -exec cp -a {} "${PKG_ROOT}/usr/lib/openlibrary/" \;
 
           cat > "${PKG_ROOT}/DEBIAN/control" <<EOF
           Package: openlibrary
@@ -304,7 +304,7 @@ jobs:
           mkdir -p rpmbuild/{SPECS,SOURCES,BUILD,RPMS,SRPMS}
           mkdir -p rpmbuild/SOURCES/openlibrary-1.0.0
           cp openlibrary-bin rpmbuild/SOURCES/openlibrary-1.0.0/openlibrary
-          find build-src/ -name "*.so*" \( -type f -o -type l \) -exec cp -a {} rpmbuild/SOURCES/openlibrary-1.0.0/ \;
+          find build-src/ \( -name "libnfd.so*" -o -name "libpugixml.so*" -o -name "libslint_cpp.so*" \) -exec cp -a {} rpmbuild/SOURCES/openlibrary-1.0.0/ \;
           tar -czf rpmbuild/SOURCES/openlibrary-1.0.0.tar.gz -C rpmbuild/SOURCES openlibrary-1.0.0
 
           cat > rpmbuild/SPECS/openlibrary.spec <<'SPEC'
@@ -381,7 +381,7 @@ jobs:
           # إنشاء أرشيف مصدر يحتوي على الملف التنفيذي والمكتبات المشتركة
           mkdir -p apk-src/openlibrary-1.0.0
           cp build-src/openlibrary apk-src/openlibrary-1.0.0/
-          find build-src/ -name "*.so*" \( -type f -o -type l \) -exec cp -a {} apk-src/openlibrary-1.0.0/ \;
+          find build-src/ \( -name "libnfd.so*" -o -name "libpugixml.so*" -o -name "libslint_cpp.so*" \) -exec cp -a {} apk-src/openlibrary-1.0.0/ \;
           tar czf apk-pkg/openlibrary-1.0.0.tar.gz -C apk-src openlibrary-1.0.0
 
           cat > apk-pkg/APKBUILD <<'EOF'
@@ -392,7 +392,7 @@ jobs:
           url="https://github.com/ahmed-x86/openlibrary"
           arch="x86_64"
           license="GPL"
-          depends="fontconfig libzip"
+          depends="fontconfig gtk+3.0"
           options="!strip !check"
           source="openlibrary-$pkgver.tar.gz"
 
@@ -453,7 +453,7 @@ jobs:
           # إنشاء أرشيف مصدر يحتوي على الملف التنفيذي والمكتبات المشتركة
           mkdir -p arch-src/openlibrary-1.0.0
           cp build-src/openlibrary arch-src/openlibrary-1.0.0/
-          find build-src/ -name "*.so*" \( -type f -o -type l \) -exec cp -a {} arch-src/openlibrary-1.0.0/ \;
+          find build-src/ \( -name "libnfd.so*" -o -name "libpugixml.so*" -o -name "libslint_cpp.so*" \) -exec cp -a {} arch-src/openlibrary-1.0.0/ \;
           chmod +x arch-src/openlibrary-1.0.0/openlibrary
           tar czf arch-pkg/openlibrary-1.0.0.tar.gz -C arch-src openlibrary-1.0.0
 
@@ -465,7 +465,7 @@ jobs:
           arch=('x86_64')
           url="https://github.com/ahmed-x86/openlibrary"
           license=('GPL')
-          depends=('fontconfig' 'libzip')
+          depends=('fontconfig')
           source=("openlibrary-${pkgver}.tar.gz")
           sha256sums=('SKIP')
 
@@ -524,7 +524,7 @@ jobs:
 
           mkdir -p arch-src/openlibrary-1.0.0
           cp build-src/openlibrary arch-src/openlibrary-1.0.0/
-          find build-src/ -name "*.so*" \( -type f -o -type l \) -exec cp -a {} arch-src/openlibrary-1.0.0/ \;
+          find build-src/ \( -name "libnfd.so*" -o -name "libpugixml.so*" -o -name "libslint_cpp.so*" \) -exec cp -a {} arch-src/openlibrary-1.0.0/ \;
           chmod +x arch-src/openlibrary-1.0.0/openlibrary
           tar czf arch-pkg/openlibrary-1.0.0.tar.gz -C arch-src openlibrary-1.0.0
 
@@ -536,7 +536,7 @@ jobs:
           arch=('x86_64')
           url="https://github.com/ahmed-x86/openlibrary"
           license=('GPL')
-          depends=('fontconfig' 'libzip')
+          depends=('fontconfig')
           source=("openlibrary-${pkgver}.tar.gz")
           sha256sums=('SKIP')
 
@@ -600,7 +600,7 @@ jobs:
           mkdir -p "${PKG_ROOT}/usr/lib/openlibrary"
           cp build-src-glibc/openlibrary "${PKG_ROOT}/usr/bin/openlibrary"
           chmod +x "${PKG_ROOT}/usr/bin/openlibrary"
-          find build-src-glibc/ -name "*.so*" \( -type f -o -type l \) -exec cp -a {} "${PKG_ROOT}/usr/lib/openlibrary/" \;
+          find build-src-glibc/ \( -name "libnfd.so*" -o -name "libpugixml.so*" -o -name "libslint_cpp.so*" \) -exec cp -a {} "${PKG_ROOT}/usr/lib/openlibrary/" \;
 
       - name: Build glibc .xbps Package with xbps-create
         run: |
@@ -628,7 +628,7 @@ jobs:
           mkdir -p "${PKG_ROOT}/usr/lib/openlibrary"
           cp build-src-musl/openlibrary "${PKG_ROOT}/usr/bin/openlibrary"
           chmod +x "${PKG_ROOT}/usr/bin/openlibrary"
-          find build-src-musl/ -name "*.so*" \( -type f -o -type l \) -exec cp -a {} "${PKG_ROOT}/usr/lib/openlibrary/" \;
+          find build-src-musl/ \( -name "libnfd.so*" -o -name "libpugixml.so*" -o -name "libslint_cpp.so*" \) -exec cp -a {} "${PKG_ROOT}/usr/lib/openlibrary/" \;
 
       - name: Build musl .xbps Package with xbps-create
         run: |
