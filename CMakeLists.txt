@@ -65,14 +65,19 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(pugixml)
 
 # --- مكتبة nativefiledialog-extended (مدير الملفات) ---
-FetchContent_Declare(
-    nfd
-    GIT_REPOSITORY https://github.com/btzy/nativefiledialog-extended.git
-    GIT_TAG        v1.2.1
-)
-set(NFD_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(NFD_INSTALL OFF CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(nfd)
+# ملاحظة: هذه المكتبة لا تدعم أندرويد إطلاقًا (تعتمد على GTK/Win32/Cocoa)،
+# لذلك لازم نستثنيها من مرحلة الجلب والبناء نفسها (FetchContent) وليس فقط من الربط،
+# وإلا فسيحاول CMake بناء nfd_gtk.cpp ضد هيدرز GTK الخاصة بالسيرفر أثناء cross-compile لأندرويد فيفشل.
+if (NOT ANDROID)
+    FetchContent_Declare(
+        nfd
+        GIT_REPOSITORY https://github.com/btzy/nativefiledialog-extended.git
+        GIT_TAG        v1.2.1
+    )
+    set(NFD_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(NFD_INSTALL OFF CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(nfd)
+endif()
 
 # ============================================================
 # الملف التنفيذي أو المكتبة (حسب النظام)
