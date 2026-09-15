@@ -1,10 +1,9 @@
 [Desktop Entry]
-Version=1.0
 Type=Application
 Name=OpenLibrary
-Comment=Open Source EPUB Reader
+Comment=Read EPUB books comfortably
 Exec=openlibrary %f
-Icon=openlibrary
+Icon=book
 Terminal=false
-Categories=Education;Literature;Viewer;
+Categories=Office;Viewer;Literature;
 MimeType=application/epub+zip;

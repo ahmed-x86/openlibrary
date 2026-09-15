@@ -5,9 +5,9 @@ import { AboutPage } from "about.slint";
 export component MainWindow inherits Window {
     title: "المكتبة المفتوحة - OpenLibrary";
     background: Theme.bg;
-    preferred-width: 1100px;
-    preferred-height: 750px;
-    min-width: 600px;
+    preferred-width: 800px;
+    preferred-height: 600px;
+    min-width: 320px;
     min-height: 400px;
     default-font-family: "system-ui, sans-serif";
 
@@ -23,6 +23,10 @@ export component MainWindow inherits Window {
     in-out property <bool> show-info: false;
     property <bool> editing-chapter: false;
     property <bool> dropdown-open: false;
+    
+    // كشف الوضع الضيق لكسر الحلقة، يعتمد على العرض الفعلي
+    property <bool> is-narrow: root.width < 600px;
+    property <bool> menu-open: false;
 
     in-out property <string> book-title: "";
     in-out property <string> book-author: "";
@@ -45,6 +49,8 @@ export component MainWindow inherits Window {
     in-out property <bool> can-go-prev: false;
 
     Rectangle {
+        width: 100%;
+        height: 100%;
         VerticalLayout {
             // شريط التنقل العلوي
             VerticalLayout {
@@ -115,11 +121,11 @@ export component MainWindow inherits Window {
 
                 // الصفحة الرئيسية
                 if !reading-mode && !show-info && root.current-tab == 0: VerticalLayout {
-                    padding-left: 32px;
-                    padding-right: 32px;
-                    padding-top: 48px;
-                    padding-bottom: 32px;
-                    spacing: 48px;
+                    padding-left: 16px;
+                    padding-right: 16px;
+                    padding-top: 24px;
+                    padding-bottom: 16px;
+                    spacing: 32px;
                     alignment: start;
 
                     VerticalLayout {
@@ -129,15 +135,17 @@ export component MainWindow inherits Window {
                         Text {
                             text: "مكتبتك الرقمية مفتوحة المصدر";
                             color: Theme.text;
-                            font-size: 36px;
+                            font-size: 24px;
                             font-weight: 800;
                             horizontal-alignment: center;
+                            wrap: word-wrap;
                         }
                         Text {
                             text: "قارئ ملفات EPUB سريع، خفيف، ومصمم ليكون مريحاً للعين.";
                             color: Theme.text-muted;
                             font-size: 14px;
                             horizontal-alignment: center;
+                            wrap: word-wrap;
                         }
 
                         HorizontalLayout {
@@ -150,8 +158,6 @@ export component MainWindow inherits Window {
                             }
                         }
                     }
-
-
                 }
 
                 // صفحة الإعدادات
@@ -364,6 +370,12 @@ export component MainWindow inherits Window {
 
                         ShadcnButton { text: "السابق →"; primary: false; width: 100px; height: 32px; disabled: !root.can-go-prev; clicked => { root.go-prev-chapter() } }
                     }
+
+                    // المنطقة الآمنة لوضع القراءة
+                    Rectangle {
+                        height: root.is-narrow ? 24px : 0px; // رقم ثابت يمنع الحلقة المفرغة
+                        background: Theme.bg;
+                    }
                 }
             }
 
@@ -372,21 +384,39 @@ export component MainWindow inherits Window {
                 Rectangle { height: 1px; background: Theme.border; }
                 
                 Rectangle {
-                    height: 64px;
                     background: Theme.surface;
+                    width: 100%;
+                    height: 65px;
                     
                     HorizontalLayout {
-                        padding-left: 24px;
-                        padding-right: 24px;
-                        padding-top: 10px;
-                        padding-bottom: 10px;
-                        spacing: 16px;
-                        alignment: center;
+                        width: 100%;
+                        height: 100%;
+                        alignment: center; // يجعل المحتوى في المنتصف إذا كانت الشاشة عريضة جداً
                         
-                        TabButton { text: "حول"; active: root.current-tab == 2; clicked => { root.current-tab = 2; } width: 140px; }
-                        TabButton { text: "الإعدادات"; active: root.current-tab == 1; clicked => { root.current-tab = 1; } width: 140px; }
-                        TabButton { text: "الرئيسية"; active: root.current-tab == 0; clicked => { root.current-tab = 0; } width: 140px; }
+                        // هذه هي الحاوية التفاعلية الذكية
+                        Rectangle {
+                            width: 100%;
+                            max-width: 500px; // لن تتمدد الأزرار أكثر من 500 بكسل في شاشات الكمبيوتر
+                            
+                            HorizontalLayout {
+                                padding-left: 16px;
+                                padding-right: 16px;
+                                padding-top: 10px;
+                                padding-bottom: 10px;
+                                spacing: 16px; // مسافة محترمة وثابتة آمنة من الحلقات
+                                
+                                TabButton { text: "حول"; active: root.current-tab == 2; clicked => { root.current-tab = 2; } horizontal-stretch: 1; }
+                                TabButton { text: "الإعدادات"; active: root.current-tab == 1; clicked => { root.current-tab = 1; } horizontal-stretch: 1; }
+                                TabButton { text: "الرئيسية"; active: root.current-tab == 0; clicked => { root.current-tab = 0; } horizontal-stretch: 1; }
+                            }
+                        }
                     }
+                }
+
+                // المنطقة الآمنة للقائمة السفلية لحماية الأزرار من شريط إيماءات النظام
+                Rectangle {
+                    height: root.is-narrow ? 24px : 0px; 
+                    background: Theme.surface;
                 }
             }
         }

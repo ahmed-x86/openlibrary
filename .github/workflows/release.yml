@@ -112,6 +112,7 @@ jobs:
 
           cp openlibrary-bin "${PKG_ROOT}/usr/bin/openlibrary"
           find build-src/ \( -name "libnfd.so*" -o -name "libpugixml.so*" -o -name "libslint_cpp.so*" \) -exec cp -a {} "${PKG_ROOT}/usr/lib/openlibrary/" \;
+          cp openlibrary.desktop "${PKG_ROOT}/usr/share/applications/"
 
           cat > "${PKG_ROOT}/DEBIAN/control" <<EOF
           Package: openlibrary
@@ -143,6 +144,7 @@ jobs:
           mkdir -p rpmbuild/SOURCES/openlibrary-1.0.0
           cp openlibrary-bin rpmbuild/SOURCES/openlibrary-1.0.0/openlibrary
           find build-src/ \( -name "libnfd.so*" -o -name "libpugixml.so*" -o -name "libslint_cpp.so*" \) -exec cp -a {} rpmbuild/SOURCES/openlibrary-1.0.0/ \;
+          cp openlibrary.desktop rpmbuild/SOURCES/openlibrary-1.0.0/
           tar -czf rpmbuild/SOURCES/openlibrary-1.0.0.tar.gz -C rpmbuild/SOURCES openlibrary-1.0.0
 
           cat > rpmbuild/SPECS/openlibrary.spec <<'SPEC'
@@ -162,12 +164,15 @@ jobs:
           %install
           mkdir -p %{buildroot}/usr/bin
           mkdir -p %{buildroot}/usr/lib/openlibrary
+          mkdir -p %{buildroot}/usr/share/applications
           cp openlibrary %{buildroot}/usr/bin/
           cp -a *.so* %{buildroot}/usr/lib/openlibrary/ || true
+          cp openlibrary.desktop %{buildroot}/usr/share/applications/
 
           %files
           /usr/bin/openlibrary
           /usr/lib/openlibrary
+          /usr/share/applications/openlibrary.desktop
           SPEC
 
           sed -i 's/^          //' rpmbuild/SPECS/openlibrary.spec
@@ -274,9 +279,11 @@ jobs:
           mkdir -p "${PKG_ROOT}/DEBIAN"
           mkdir -p "${PKG_ROOT}/usr/bin"
           mkdir -p "${PKG_ROOT}/usr/lib/openlibrary"
+          mkdir -p "${PKG_ROOT}/usr/share/applications"
 
           cp openlibrary-bin "${PKG_ROOT}/usr/bin/openlibrary"
           find build-src/ \( -name "libnfd.so*" -o -name "libpugixml.so*" -o -name "libslint_cpp.so*" \) -exec cp -a {} "${PKG_ROOT}/usr/lib/openlibrary/" \;
+          cp openlibrary.desktop "${PKG_ROOT}/usr/share/applications/"
 
           cat > "${PKG_ROOT}/DEBIAN/control" <<EOF
           Package: openlibrary
@@ -305,6 +312,7 @@ jobs:
           mkdir -p rpmbuild/SOURCES/openlibrary-1.0.0
           cp openlibrary-bin rpmbuild/SOURCES/openlibrary-1.0.0/openlibrary
           find build-src/ \( -name "libnfd.so*" -o -name "libpugixml.so*" -o -name "libslint_cpp.so*" \) -exec cp -a {} rpmbuild/SOURCES/openlibrary-1.0.0/ \;
+          cp openlibrary.desktop rpmbuild/SOURCES/openlibrary-1.0.0/
           tar -czf rpmbuild/SOURCES/openlibrary-1.0.0.tar.gz -C rpmbuild/SOURCES openlibrary-1.0.0
 
           cat > rpmbuild/SPECS/openlibrary.spec <<'SPEC'
@@ -324,12 +332,15 @@ jobs:
           %install
           mkdir -p %{buildroot}/usr/bin
           mkdir -p %{buildroot}/usr/lib/openlibrary
+          mkdir -p %{buildroot}/usr/share/applications
           cp openlibrary %{buildroot}/usr/bin/
           cp -a *.so* %{buildroot}/usr/lib/openlibrary/ || true
+          cp openlibrary.desktop %{buildroot}/usr/share/applications/
 
           %files
           /usr/bin/openlibrary
           /usr/lib/openlibrary
+          /usr/share/applications/openlibrary.desktop
           SPEC
 
           sed -i 's/^          //' rpmbuild/SPECS/openlibrary.spec
@@ -382,6 +393,7 @@ jobs:
           mkdir -p apk-src/openlibrary-1.0.0
           cp build-src/openlibrary apk-src/openlibrary-1.0.0/
           find build-src/ \( -name "libnfd.so*" -o -name "libpugixml.so*" -o -name "libslint_cpp.so*" \) -exec cp -a {} apk-src/openlibrary-1.0.0/ \;
+          cp openlibrary.desktop apk-src/openlibrary-1.0.0/
           tar czf apk-pkg/openlibrary-1.0.0.tar.gz -C apk-src openlibrary-1.0.0
 
           cat > apk-pkg/APKBUILD <<'EOF'
@@ -402,6 +414,7 @@ jobs:
               for lib in "$srcdir"/openlibrary-$pkgver/*.so*; do
                   [ -e "$lib" ] && install -Dm755 "$lib" "$pkgdir"/usr/lib/openlibrary/"$(basename "$lib")"
               done
+              install -Dm644 "$srcdir"/openlibrary-$pkgver/openlibrary.desktop "$pkgdir"/usr/share/applications/openlibrary.desktop
           }
           EOF
           sed -i 's/^          //' apk-pkg/APKBUILD
@@ -454,6 +467,7 @@ jobs:
           mkdir -p arch-src/openlibrary-1.0.0
           cp build-src/openlibrary arch-src/openlibrary-1.0.0/
           find build-src/ \( -name "libnfd.so*" -o -name "libpugixml.so*" -o -name "libslint_cpp.so*" \) -exec cp -a {} arch-src/openlibrary-1.0.0/ \;
+          cp openlibrary.desktop arch-src/openlibrary-1.0.0/
           chmod +x arch-src/openlibrary-1.0.0/openlibrary
           tar czf arch-pkg/openlibrary-1.0.0.tar.gz -C arch-src openlibrary-1.0.0
 
@@ -476,6 +490,7 @@ jobs:
               for lib in *.so*; do
                   [ -e "$lib" ] && install -Dm755 "$lib" "${pkgdir}/usr/lib/openlibrary/$lib"
               done
+              install -Dm644 openlibrary.desktop "${pkgdir}/usr/share/applications/openlibrary.desktop"
           }
           EOF
           sed -i 's/^          //' arch-pkg/PKGBUILD
@@ -525,6 +540,7 @@ jobs:
           mkdir -p arch-src/openlibrary-1.0.0
           cp build-src/openlibrary arch-src/openlibrary-1.0.0/
           find build-src/ \( -name "libnfd.so*" -o -name "libpugixml.so*" -o -name "libslint_cpp.so*" \) -exec cp -a {} arch-src/openlibrary-1.0.0/ \;
+          cp openlibrary.desktop arch-src/openlibrary-1.0.0/
           chmod +x arch-src/openlibrary-1.0.0/openlibrary
           tar czf arch-pkg/openlibrary-1.0.0.tar.gz -C arch-src openlibrary-1.0.0
 
@@ -547,6 +563,7 @@ jobs:
               for lib in *.so*; do
                   [ -e "$lib" ] && install -Dm755 "$lib" "${pkgdir}/usr/lib/openlibrary/$lib"
               done
+              install -Dm644 openlibrary.desktop "${pkgdir}/usr/share/applications/openlibrary.desktop"
           }
           EOF
           sed -i 's/^          //' arch-pkg/PKGBUILD
@@ -598,9 +615,11 @@ jobs:
           PKG_ROOT="void-pkg-root"
           mkdir -p "${PKG_ROOT}/usr/bin"
           mkdir -p "${PKG_ROOT}/usr/lib/openlibrary"
+          mkdir -p "${PKG_ROOT}/usr/share/applications"
           cp build-src-glibc/openlibrary "${PKG_ROOT}/usr/bin/openlibrary"
           chmod +x "${PKG_ROOT}/usr/bin/openlibrary"
           find build-src-glibc/ \( -name "libnfd.so*" -o -name "libpugixml.so*" -o -name "libslint_cpp.so*" \) -exec cp -a {} "${PKG_ROOT}/usr/lib/openlibrary/" \;
+          cp openlibrary.desktop "${PKG_ROOT}/usr/share/applications/"
 
       - name: Build glibc .xbps Package with xbps-create
         run: |
@@ -626,9 +645,11 @@ jobs:
           PKG_ROOT="void-pkg-root-musl"
           mkdir -p "${PKG_ROOT}/usr/bin"
           mkdir -p "${PKG_ROOT}/usr/lib/openlibrary"
+          mkdir -p "${PKG_ROOT}/usr/share/applications"
           cp build-src-musl/openlibrary "${PKG_ROOT}/usr/bin/openlibrary"
           chmod +x "${PKG_ROOT}/usr/bin/openlibrary"
           find build-src-musl/ \( -name "libnfd.so*" -o -name "libpugixml.so*" -o -name "libslint_cpp.so*" \) -exec cp -a {} "${PKG_ROOT}/usr/lib/openlibrary/" \;
+          cp openlibrary.desktop "${PKG_ROOT}/usr/share/applications/"
 
       - name: Build musl .xbps Package with xbps-create
         run: |
