@@ -11,7 +11,12 @@
 #include <string>
 #include <cstdlib> // <-- تمت الإضافة لتشغيل أوامر النظام
 
-int main() {
+#ifdef __ANDROID__
+extern "C" void slint_main()
+#else
+int main()
+#endif
+{
     // إنشاء نسخة من النافذة الرئيسية
     auto ui = MainWindow::create();
 
@@ -157,5 +162,7 @@ int main() {
     // تشغيل التطبيق
     ui->run();
 
+#ifndef __ANDROID__
     return 0;
+#endif
 }
