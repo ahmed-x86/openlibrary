@@ -4,56 +4,63 @@ import android.app.NativeActivity;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStream;
+import android.util.Log;
+import android.app.Activity;
 
+// استخدام NativeActivity لأن Slint يعتمد عليها عادة، أو Activity عادية إذا كنت تستخدم بنية مختلفة
 public class MainActivity extends NativeActivity {
-    
-    // دوال الربط مع C++
+
+    private static final int FILE_SELECT_CODE = 1234;
+    private static final String TAG = "OpenLibrary";
+
+    // 1. الإعلان عن الدوال الموجودة في كود C++ (JNI)
     public native void initJni();
     public native void onFileSelected(String filePath);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        // إبلاغ C++ أن التطبيق بدأ لتهيئة الجسر
-        initJni();
+        
+        // 2. استدعاء دالة التهيئة لإرسال Activity و JVM إلى C++
+        try {
+            initJni();
+            Log.i(TAG, "تم استدعاء initJni بنجاح.");
+        } catch (UnsatisfiedLinkError e) {
+            Log.e(TAG, "فشل استدعاء initJni. هل تم تحميل المكتبة؟", e);
+        }
     }
 
-    // هذه الدالة سيستدعيها كود C++ لفتح مدير الملفات
+    // 3. هذه الدالة هي التي يستدعيها كود C++ لفتح نافذة اختيار الملفات
     public void openFilePicker() {
+        Log.i(TAG, "تم طلب فتح نافذة اختيار الملفات من C++");
         Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
-        intent.setType("application/epub+zip");
-        String[] mimetypes = {"application/epub+zip", "application/octet-stream"};
-        intent.putExtra(Intent.EXTRA_MIME_TYPES, mimetypes);
-        startActivityForResult(intent, 1001);
+        intent.setType("application/epub+zip"); // نطلب ملفات epub
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+
+        try {
+            startActivityForResult(
+                Intent.createChooser(intent, "اختر كتاب EPUB"),
+                FILE_SELECT_CODE
+            );
+        } catch (android.content.ActivityNotFoundException ex) {
+            Log.e(TAG, "لا يوجد تطبيق لإدارة الملفات مثبت على الجهاز.");
+        }
     }
 
-    // استقبال الملف بعد أن يختاره المستخدم
+    // 4. هذه الدالة تستقبل الملف الذي اختاره المستخدم وترسله إلى C++
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == 1001 && resultCode == RESULT_OK && data != null) {
-            Uri uri = data.getData();
-            if (uri != null) {
-                try {
-                    // نسخ الملف المشفر إلى مسار حقيقي داخل الهاتف ليفهمه C++
-                    InputStream is = getContentResolver().openInputStream(uri);
-                    File tempFile = new File(getCacheDir(), "current_book.epub");
-                    FileOutputStream os = new FileOutputStream(tempFile);
-                    byte[] buffer = new byte[1024];
-                    int length;
-                    while ((length = is.read(buffer)) > 0) {
-                        os.write(buffer, 0, length);
-                    }
-                    os.close();
-                    is.close();
+        
+        if (requestCode == FILE_SELECT_CODE && resultCode == Activity.RESULT_OK) {
+            if (data != null) {
+                Uri uri = data.getData();
+                if (uri != null) {
+                    Log.i(TAG, "تم اختيار الملف: " + uri.toString());
                     
-                    // إرسال المسار الحقيقي إلى C++
-                    onFileSelected(tempFile.getAbsolutePath());
-                } catch (Exception e) {
-                    e.printStackTrace();
+                    // تحذير: أندرويد سيرجع مسار من نوع content:// وليس مسار حقيقي (مثل /storage/...)
+                    // سنرسل المسار مؤقتاً لنتأكد أن الجسر يعمل. في الخطوة القادمة سنحتاج لنسخ هذا الـ content:// إلى مسار حقيقي ليتمكن C++ من قراءته.
+                    onFileSelected(uri.toString());
                 }
             }
         }
