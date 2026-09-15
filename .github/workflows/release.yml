@@ -33,17 +33,49 @@ jobs:
           cmake -B build -DCMAKE_BUILD_TYPE=Release
           cmake --build build --config Release
 
-      - name: Compress Linux Binary
-        run: upx --best --lzma build/openlibrary || true
+      - name: Stage shared libraries from build tree
+        run: |
+          mkdir -p staging
+          cp build/openlibrary staging/
+          find build/ -name "*.so*" \( -type f -o -type l \) -exec cp -a {} staging/ \;
+          echo "=== Staged files ==="
+          ls -la staging/
 
-      - name: Prepare Linux ELF Binary
-        run: cp build/openlibrary openlibrary-elf-glibc
+      - name: Create Portable Archive (patchelf + $ORIGIN)
+        run: |
+          mkdir -p portable/OpenLibrary
+          cp staging/* portable/OpenLibrary/
+          patchelf --set-rpath '$ORIGIN' portable/OpenLibrary/openlibrary
+          tar czf OpenLibrary-Linux-Portable.tar.gz -C portable OpenLibrary
+
+      - name: Prepare package-ready binary (RPATH = /usr/lib/openlibrary)
+        run: |
+          mkdir -p pkg-staging
+          cp staging/* pkg-staging/
+          patchelf --set-rpath '/usr/lib/openlibrary' pkg-staging/openlibrary
+
+      - name: Compress standalone ELF Binary
+        run: |
+          cp build/openlibrary openlibrary-elf-glibc
+          upx --best --lzma openlibrary-elf-glibc || true
 
       - name: Upload Linux ELF Binary
         uses: actions/upload-artifact@v4
         with:
           name: OpenLibrary-Linux-ELF
           path: openlibrary-elf-glibc
+
+      - name: Upload Portable Archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenLibrary-Linux-Portable
+          path: OpenLibrary-Linux-Portable.tar.gz
+
+      - name: Upload package-ready build outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenLibrary-Linux-PkgBuild
+          path: pkg-staging/
 
   # ===== لينكس (glibc) - تغليف .deb و .rpm =====
   build-linux-packages:
@@ -54,18 +86,18 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Download Linux ELF Binary
+      - name: Download Linux Build Outputs
         uses: actions/download-artifact@v4
         with:
-          name: OpenLibrary-Linux-ELF
-          path: elf-src
+          name: OpenLibrary-Linux-PkgBuild
+          path: build-src
 
       - name: Install Packaging Dependencies
         run: sudo apt-get update && sudo apt-get install -y rpm
 
       - name: Prepare Binary for Packaging
         run: |
-          cp elf-src/openlibrary-elf-glibc openlibrary-bin
+          cp build-src/openlibrary openlibrary-bin
           chmod +x openlibrary-bin
 
       # بناء حزمة .deb
@@ -74,10 +106,12 @@ jobs:
           PKG_ROOT="deb-build/openlibrary_1.0.0_amd64"
           mkdir -p "${PKG_ROOT}/DEBIAN"
           mkdir -p "${PKG_ROOT}/usr/bin"
+          mkdir -p "${PKG_ROOT}/usr/lib/openlibrary"
           mkdir -p "${PKG_ROOT}/usr/share/applications"
           mkdir -p "${PKG_ROOT}/usr/share/icons/hicolor/256x256/apps"
 
           cp openlibrary-bin "${PKG_ROOT}/usr/bin/openlibrary"
+          find build-src/ -name "*.so*" \( -type f -o -type l \) -exec cp -a {} "${PKG_ROOT}/usr/lib/openlibrary/" \;
 
           cat > "${PKG_ROOT}/DEBIAN/control" <<EOF
           Package: openlibrary
@@ -108,6 +142,7 @@ jobs:
 
           mkdir -p rpmbuild/SOURCES/openlibrary-1.0.0
           cp openlibrary-bin rpmbuild/SOURCES/openlibrary-1.0.0/openlibrary
+          find build-src/ -name "*.so*" \( -type f -o -type l \) -exec cp -a {} rpmbuild/SOURCES/openlibrary-1.0.0/ \;
           tar -czf rpmbuild/SOURCES/openlibrary-1.0.0.tar.gz -C rpmbuild/SOURCES openlibrary-1.0.0
 
           cat > rpmbuild/SPECS/openlibrary.spec <<'SPEC'
@@ -126,10 +161,13 @@ jobs:
 
           %install
           mkdir -p %{buildroot}/usr/bin
+          mkdir -p %{buildroot}/usr/lib/openlibrary
           cp openlibrary %{buildroot}/usr/bin/
+          cp -a *.so* %{buildroot}/usr/lib/openlibrary/ || true
 
           %files
           /usr/bin/openlibrary
+          /usr/lib/openlibrary
           SPEC
 
           sed -i 's/^          //' rpmbuild/SPECS/openlibrary.spec
@@ -163,17 +201,49 @@ jobs:
           cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
           cmake --build build --config Release
 
-      - name: Compress Binary
-        run: upx --best --lzma build/openlibrary || true
+      - name: Stage shared libraries from build tree
+        run: |
+          mkdir -p staging
+          cp build/openlibrary staging/
+          find build/ -name "*.so*" \( -type f -o -type l \) -exec cp -a {} staging/ \;
+          echo "=== Staged files ==="
+          ls -la staging/
 
-      - name: Prepare musl ELF Binary
-        run: cp build/openlibrary openlibrary-elf-musllibc
+      - name: Create Portable Archive (patchelf + $ORIGIN)
+        run: |
+          mkdir -p portable/OpenLibrary
+          cp staging/* portable/OpenLibrary/
+          patchelf --set-rpath '$ORIGIN' portable/OpenLibrary/openlibrary
+          tar czf OpenLibrary-Linux-musl-Portable.tar.gz -C portable OpenLibrary
+
+      - name: Prepare package-ready binary (RPATH = /usr/lib/openlibrary)
+        run: |
+          mkdir -p pkg-staging
+          cp staging/* pkg-staging/
+          patchelf --set-rpath '/usr/lib/openlibrary' pkg-staging/openlibrary
+
+      - name: Compress standalone musl ELF Binary
+        run: |
+          cp build/openlibrary openlibrary-elf-musllibc
+          upx --best --lzma openlibrary-elf-musllibc || true
 
       - name: Upload Alpine Artifact
         uses: actions/upload-artifact@v4
         with:
           name: OpenLibrary-Linux-ELF-musl
           path: openlibrary-elf-musllibc
+
+      - name: Upload musl Portable Archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenLibrary-Linux-musl-Portable
+          path: OpenLibrary-Linux-musl-Portable.tar.gz
+
+      - name: Upload musl package-ready build outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenLibrary-Linux-musl-PkgBuild
+          path: pkg-staging/
 
   # ===== تغليف .deb و .rpm نسخة musl =====
   build-linux-packages-musl:
@@ -184,18 +254,18 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Download musl ELF Binary
+      - name: Download musl Build Outputs
         uses: actions/download-artifact@v4
         with:
-          name: OpenLibrary-Linux-ELF-musl
-          path: elf-src
+          name: OpenLibrary-Linux-musl-PkgBuild
+          path: build-src
 
       - name: Install Packaging Dependencies
         run: sudo apt-get update && sudo apt-get install -y rpm
 
       - name: Prepare Binary for Packaging
         run: |
-          cp elf-src/openlibrary-elf-musllibc openlibrary-bin
+          cp build-src/openlibrary openlibrary-bin
           chmod +x openlibrary-bin
 
       - name: Build .deb Package
@@ -203,8 +273,10 @@ jobs:
           PKG_ROOT="deb-build/openlibrary_1.0.0_amd64"
           mkdir -p "${PKG_ROOT}/DEBIAN"
           mkdir -p "${PKG_ROOT}/usr/bin"
+          mkdir -p "${PKG_ROOT}/usr/lib/openlibrary"
 
           cp openlibrary-bin "${PKG_ROOT}/usr/bin/openlibrary"
+          find build-src/ -name "*.so*" \( -type f -o -type l \) -exec cp -a {} "${PKG_ROOT}/usr/lib/openlibrary/" \;
 
           cat > "${PKG_ROOT}/DEBIAN/control" <<EOF
           Package: openlibrary
@@ -232,6 +304,7 @@ jobs:
           mkdir -p rpmbuild/{SPECS,SOURCES,BUILD,RPMS,SRPMS}
           mkdir -p rpmbuild/SOURCES/openlibrary-1.0.0
           cp openlibrary-bin rpmbuild/SOURCES/openlibrary-1.0.0/openlibrary
+          find build-src/ -name "*.so*" \( -type f -o -type l \) -exec cp -a {} rpmbuild/SOURCES/openlibrary-1.0.0/ \;
           tar -czf rpmbuild/SOURCES/openlibrary-1.0.0.tar.gz -C rpmbuild/SOURCES openlibrary-1.0.0
 
           cat > rpmbuild/SPECS/openlibrary.spec <<'SPEC'
@@ -250,10 +323,13 @@ jobs:
 
           %install
           mkdir -p %{buildroot}/usr/bin
+          mkdir -p %{buildroot}/usr/lib/openlibrary
           cp openlibrary %{buildroot}/usr/bin/
+          cp -a *.so* %{buildroot}/usr/lib/openlibrary/ || true
 
           %files
           /usr/bin/openlibrary
+          /usr/lib/openlibrary
           SPEC
 
           sed -i 's/^          //' rpmbuild/SPECS/openlibrary.spec
@@ -277,11 +353,11 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Download musl ELF Binary
+      - name: Download musl Build Outputs
         uses: actions/download-artifact@v4
         with:
-          name: OpenLibrary-Linux-ELF-musl
-          path: elf-src
+          name: OpenLibrary-Linux-musl-PkgBuild
+          path: build-src
 
       - name: Install abuild Tooling
         run: |
@@ -301,7 +377,12 @@ jobs:
       - name: Prepare APKBUILD Sources
         run: |
           mkdir -p apk-pkg
-          cp elf-src/openlibrary-elf-musllibc apk-pkg/openlibrary
+
+          # إنشاء أرشيف مصدر يحتوي على الملف التنفيذي والمكتبات المشتركة
+          mkdir -p apk-src/openlibrary-1.0.0
+          cp build-src/openlibrary apk-src/openlibrary-1.0.0/
+          find build-src/ -name "*.so*" \( -type f -o -type l \) -exec cp -a {} apk-src/openlibrary-1.0.0/ \;
+          tar czf apk-pkg/openlibrary-1.0.0.tar.gz -C apk-src openlibrary-1.0.0
 
           cat > apk-pkg/APKBUILD <<'EOF'
           pkgname=openlibrary
@@ -313,17 +394,21 @@ jobs:
           license="GPL"
           depends="fontconfig libzip"
           options="!strip !check"
-          source="openlibrary"
+          source="openlibrary-$pkgver.tar.gz"
 
           package() {
-              install -Dm755 "$srcdir"/openlibrary "$pkgdir"/usr/bin/openlibrary
+              install -Dm755 "$srcdir"/openlibrary-$pkgver/openlibrary "$pkgdir"/usr/bin/openlibrary
+              install -d "$pkgdir"/usr/lib/openlibrary
+              for lib in "$srcdir"/openlibrary-$pkgver/*.so*; do
+                  [ -e "$lib" ] && install -Dm755 "$lib" "$pkgdir"/usr/lib/openlibrary/"$(basename "$lib")"
+              done
           }
           EOF
           sed -i 's/^          //' apk-pkg/APKBUILD
 
       - name: Build .apk Package with abuild
         run: |
-          chmod +x apk-pkg/openlibrary
+          chmod +x build-src/openlibrary
           chown -R builder:builder apk-pkg
           cd apk-pkg
           su builder -c "cd \$(pwd) && abuild checksum && abuild -r"
@@ -346,11 +431,11 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Download glibc Binary Artifact
+      - name: Download glibc Build Outputs
         uses: actions/download-artifact@v4
         with:
-          name: OpenLibrary-Linux-ELF
-          path: elf-src
+          name: OpenLibrary-Linux-PkgBuild
+          path: build-src
 
       - name: Install Packaging Dependencies
         run: pacman -Syu --noconfirm --needed sudo
@@ -364,8 +449,13 @@ jobs:
       - name: Prepare PKGBUILD Sources
         run: |
           mkdir -p arch-pkg
-          cp elf-src/openlibrary-elf-glibc arch-pkg/openlibrary
-          chmod +x arch-pkg/openlibrary
+
+          # إنشاء أرشيف مصدر يحتوي على الملف التنفيذي والمكتبات المشتركة
+          mkdir -p arch-src/openlibrary-1.0.0
+          cp build-src/openlibrary arch-src/openlibrary-1.0.0/
+          find build-src/ -name "*.so*" \( -type f -o -type l \) -exec cp -a {} arch-src/openlibrary-1.0.0/ \;
+          chmod +x arch-src/openlibrary-1.0.0/openlibrary
+          tar czf arch-pkg/openlibrary-1.0.0.tar.gz -C arch-src openlibrary-1.0.0
 
           cat > arch-pkg/PKGBUILD <<'EOF'
           pkgname=openlibrary
@@ -376,11 +466,16 @@ jobs:
           url="https://github.com/ahmed-x86/openlibrary"
           license=('GPL')
           depends=('fontconfig' 'libzip')
-          source=("openlibrary")
+          source=("openlibrary-${pkgver}.tar.gz")
           sha256sums=('SKIP')
 
           package() {
-              install -Dm755 "${srcdir}/openlibrary" "${pkgdir}/usr/bin/openlibrary"
+              cd "${srcdir}/openlibrary-${pkgver}"
+              install -Dm755 openlibrary "${pkgdir}/usr/bin/openlibrary"
+              install -d "${pkgdir}/usr/lib/openlibrary"
+              for lib in *.so*; do
+                  [ -e "$lib" ] && install -Dm755 "$lib" "${pkgdir}/usr/lib/openlibrary/$lib"
+              done
           }
           EOF
           sed -i 's/^          //' arch-pkg/PKGBUILD
@@ -408,11 +503,11 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Download musl Binary Artifact
+      - name: Download musl Build Outputs
         uses: actions/download-artifact@v4
         with:
-          name: OpenLibrary-Linux-ELF-musl
-          path: elf-src
+          name: OpenLibrary-Linux-musl-PkgBuild
+          path: build-src
 
       - name: Install Packaging Dependencies
         run: pacman -Syu --noconfirm --needed sudo
@@ -426,8 +521,12 @@ jobs:
       - name: Prepare PKGBUILD Sources
         run: |
           mkdir -p arch-pkg
-          cp elf-src/openlibrary-elf-musllibc arch-pkg/openlibrary
-          chmod +x arch-pkg/openlibrary
+
+          mkdir -p arch-src/openlibrary-1.0.0
+          cp build-src/openlibrary arch-src/openlibrary-1.0.0/
+          find build-src/ -name "*.so*" \( -type f -o -type l \) -exec cp -a {} arch-src/openlibrary-1.0.0/ \;
+          chmod +x arch-src/openlibrary-1.0.0/openlibrary
+          tar czf arch-pkg/openlibrary-1.0.0.tar.gz -C arch-src openlibrary-1.0.0
 
           cat > arch-pkg/PKGBUILD <<'EOF'
           pkgname=openlibrary
@@ -438,11 +537,16 @@ jobs:
           url="https://github.com/ahmed-x86/openlibrary"
           license=('GPL')
           depends=('fontconfig' 'libzip')
-          source=("openlibrary")
+          source=("openlibrary-${pkgver}.tar.gz")
           sha256sums=('SKIP')
 
           package() {
-              install -Dm755 "${srcdir}/openlibrary" "${pkgdir}/usr/bin/openlibrary"
+              cd "${srcdir}/openlibrary-${pkgver}"
+              install -Dm755 openlibrary "${pkgdir}/usr/bin/openlibrary"
+              install -d "${pkgdir}/usr/lib/openlibrary"
+              for lib in *.so*; do
+                  [ -e "$lib" ] && install -Dm755 "$lib" "${pkgdir}/usr/lib/openlibrary/$lib"
+              done
           }
           EOF
           sed -i 's/^          //' arch-pkg/PKGBUILD
@@ -477,24 +581,26 @@ jobs:
           xbps-install -Suy
           xbps-install -y base-devel
 
-      - name: Download glibc Binary Artifact
+      - name: Download glibc Build Outputs
         uses: actions/download-artifact@v4
         with:
-          name: OpenLibrary-Linux-ELF
-          path: void-glibc-src
+          name: OpenLibrary-Linux-PkgBuild
+          path: build-src-glibc
 
-      - name: Download musl Binary Artifact
+      - name: Download musl Build Outputs
         uses: actions/download-artifact@v4
         with:
-          name: OpenLibrary-Linux-ELF-musl
-          path: void-musl-src
+          name: OpenLibrary-Linux-musl-PkgBuild
+          path: build-src-musl
 
       - name: Prepare Package Root (glibc)
         run: |
           PKG_ROOT="void-pkg-root"
           mkdir -p "${PKG_ROOT}/usr/bin"
-          cp void-glibc-src/openlibrary-elf-glibc "${PKG_ROOT}/usr/bin/openlibrary"
+          mkdir -p "${PKG_ROOT}/usr/lib/openlibrary"
+          cp build-src-glibc/openlibrary "${PKG_ROOT}/usr/bin/openlibrary"
           chmod +x "${PKG_ROOT}/usr/bin/openlibrary"
+          find build-src-glibc/ -name "*.so*" \( -type f -o -type l \) -exec cp -a {} "${PKG_ROOT}/usr/lib/openlibrary/" \;
 
       - name: Build glibc .xbps Package with xbps-create
         run: |
@@ -519,8 +625,10 @@ jobs:
         run: |
           PKG_ROOT="void-pkg-root-musl"
           mkdir -p "${PKG_ROOT}/usr/bin"
-          cp void-musl-src/openlibrary-elf-musllibc "${PKG_ROOT}/usr/bin/openlibrary"
+          mkdir -p "${PKG_ROOT}/usr/lib/openlibrary"
+          cp build-src-musl/openlibrary "${PKG_ROOT}/usr/bin/openlibrary"
           chmod +x "${PKG_ROOT}/usr/bin/openlibrary"
+          find build-src-musl/ -name "*.so*" \( -type f -o -type l \) -exec cp -a {} "${PKG_ROOT}/usr/lib/openlibrary/" \;
 
       - name: Build musl .xbps Package with xbps-create
         run: |
@@ -761,10 +869,10 @@ jobs:
 
             echo "### 🐧 لينكس (x86_64)"
             echo ""
-            echo "| المكتبة \\ الصيغة | ELF | .deb | .rpm | .pkg.tar.zst | .xbps | .apk |"
-            echo "|:---|:---:|:---:|:---:|:---:|:---:|:---:|"
-            echo "| **glibc** | $(cell openlibrary-elf-glibc) | $(cell OpenLibrary-Linux.deb) | $(cell OpenLibrary-Linux.rpm) | $(cell OpenLibrary-Linux.pkg.tar.zst) | $(cell OpenLibrary-Void-glibc.xbps) | ----- |"
-            echo "| **musl**  | $(cell openlibrary-elf-musllibc) | $(cell OpenLibrary-Linux-musl.deb) | $(cell OpenLibrary-Linux-musl.rpm) | $(cell OpenLibrary-Linux-musl.pkg.tar.zst) | $(cell OpenLibrary-Void-musl.xbps) | $(cell OpenLibrary-Alpine.apk) |"
+            echo "| المكتبة \\ الصيغة | ELF | .tar.gz | .deb | .rpm | .pkg.tar.zst | .xbps | .apk |"
+            echo "|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|"
+            echo "| **glibc** | $(cell openlibrary-elf-glibc) | $(cell OpenLibrary-Linux-Portable.tar.gz) | $(cell OpenLibrary-Linux.deb) | $(cell OpenLibrary-Linux.rpm) | $(cell OpenLibrary-Linux.pkg.tar.zst) | $(cell OpenLibrary-Void-glibc.xbps) | ----- |"
+            echo "| **musl**  | $(cell openlibrary-elf-musllibc) | $(cell OpenLibrary-Linux-musl-Portable.tar.gz) | $(cell OpenLibrary-Linux-musl.deb) | $(cell OpenLibrary-Linux-musl.rpm) | $(cell OpenLibrary-Linux-musl.pkg.tar.zst) | $(cell OpenLibrary-Void-musl.xbps) | $(cell OpenLibrary-Alpine.apk) |"
             echo ""
 
             echo "### 🤖 أندرويد"
@@ -788,6 +896,8 @@ jobs:
             echo ">"
             echo "> 📦 **glibc ولا musl؟** لو مش عارف، غالبًا توزيعتك بتستخدم **glibc** (زي Ubuntu، Debian، Fedora، Arch، Void...) وده الاختيار الآمن لمعظم الناس. أما **musl** فبتستخدمها توزيعات زي Alpine، ومستخدميها عادةً عارفين إنهم بيستخدموها."
             echo ">"
+            echo "> 📁 **إيه هو ملف الـ .tar.gz؟** ده أرشيف محمول فيه البرنامج ومكتباته جاهزين. فكّه واشتغل مباشرة بـ \`./openlibrary\` — مش محتاج تثبيت ولا صلاحيات root."
+            echo ">"
             echo "> 💡 **مش عارف تختار (أندرويد)؟** جرّب نسخة **arm64-v8a** لو موبايلك حديث (2018 فما فوق)، أو حمّل النسخة **العامة (Universal)** لو مش عارف معماريتك وعايز خيار آمن يشتغل على أي جهاز."
             echo ""
             echo "---"
@@ -798,7 +908,26 @@ jobs:
       - name: Publish Release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/*
+          files: |
+            artifacts/openlibrary-elf-glibc
+            artifacts/openlibrary-elf-musllibc
+            artifacts/OpenLibrary-Linux-Portable.tar.gz
+            artifacts/OpenLibrary-Linux-musl-Portable.tar.gz
+            artifacts/OpenLibrary-Linux.deb
+            artifacts/OpenLibrary-Linux.rpm
+            artifacts/OpenLibrary-Linux-musl.deb
+            artifacts/OpenLibrary-Linux-musl.rpm
+            artifacts/OpenLibrary-Linux.pkg.tar.zst
+            artifacts/OpenLibrary-Linux-musl.pkg.tar.zst
+            artifacts/OpenLibrary-Void-glibc.xbps
+            artifacts/OpenLibrary-Void-musl.xbps
+            artifacts/OpenLibrary-Alpine.apk
+            artifacts/OpenLibrary-Android-x86.apk
+            artifacts/OpenLibrary-Android-x86_64.apk
+            artifacts/OpenLibrary-Android-armeabi-v7a.apk
+            artifacts/OpenLibrary-Android-arm64-v8a.apk
+            artifacts/OpenLibrary-Android.apk
+            artifacts/OpenLibrary-Windows.zip
           body_path: RELEASE_NOTES.md
           draft: false
           prerelease: false
