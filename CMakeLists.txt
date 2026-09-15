@@ -103,6 +103,11 @@ endif()
 # تجميع ملف الواجهة (.slint) وتحويله إلى كود C++
 slint_target_sources(openlibrary ui/main.slint)
 
+# ============================================================
+# إجبار Slint على دمج جميع الصور (SVGs/PNGs) مباشرة داخل التطبيق
+# ============================================================
+set_target_properties(openlibrary PROPERTIES SLINT_EMBED_RESOURCES ON)
+
 # ربط جميع المكتبات بالمشروع
 if (TARGET PkgConfig::LIBZIP)
     target_link_libraries(openlibrary PRIVATE PkgConfig::LIBZIP)
