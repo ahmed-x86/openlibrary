@@ -665,7 +665,11 @@ jobs:
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           cd android
-          gradle assembleRelease -Pandroid.injected.build.abi=${{ matrix.arch }}
+          # ملاحظة: android.injected.build.abi هي خاصية داخلية يستخدمها Android Studio عادة
+          # عند التشغيل المباشر من الـ IDE، وهي تجعل AGP يضيف android:testOnly="true"
+          # تلقائيًا في الـ manifest، فيفشل التثبيت العادي برسالة INSTALL_FAILED_TEST_ONLY.
+          # نضيف android.injected.testOnly=false صراحة لإجبار AGP على عدم إضافتها.
+          gradle assembleRelease -Pandroid.injected.build.abi=${{ matrix.arch }} -Pandroid.injected.testOnly=false
 
       - name: Find and Copy APK
         run: |
