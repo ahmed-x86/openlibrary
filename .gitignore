@@ -10,7 +10,7 @@ compile_commands.json
 CMakeScripts/
 
 # Executables
-openlibrary
+./openlibrary
 openshamela
 
 # Slint and C++ Generated Files

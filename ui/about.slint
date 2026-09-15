@@ -39,11 +39,10 @@ export component Accordion inherits VerticalLayout {
         }
     }
     
-    // التعديل هنا: إزالة if واستخدام visible و height للطي والفتح
     Rectangle {
         visible: root.is-open;
         height: root.is-open ? content-layout.preferred-height : 0px;
-        clip: true; // لمنع المحتوى من التداخل عندما يكون الارتفاع صفر
+        clip: true; 
         background: Theme.surface;
         border-radius: 8px;
         border-color: Theme.border;
@@ -106,25 +105,37 @@ export component AboutPage inherits VerticalLayout {
                     
                     HorizontalLayout {
                         alignment: end;
-                        spacing: 24px;
+                        spacing: 16px;
                         
-                        TouchArea {
-                            mouse-cursor: pointer;
-                            clicked => { root.open-link("https://t.me/arch_gnu_linux_user") }
+                        Rectangle {
+                            background: ta_telegram.has-hover ? Theme.surface : transparent;
+                            border-radius: 8px;
+                            
+                            ta_telegram := TouchArea {
+                                clicked => { root.open-link("https://t.me/arch_gnu_linux_user") }
+                            }
+                            
                             HorizontalLayout {
+                                padding: 12px; 
                                 spacing: 8px;
-                                alignment: end;
+                                alignment: center;
                                 Text { text: "@arch_gnu_linux_user"; color: Theme.is-dark ? #60a5fa : #3b82f6; font-size: 14px; vertical-alignment: center; }
                                 Image { source: @image-url("icons/telegram.svg"); width: 20px; height: 20px; colorize: Theme.text; }
                             }
                         }
                         
-                        TouchArea {
-                            mouse-cursor: pointer;
-                            clicked => { root.open-link("https://github.com/ahmed-x86") }
+                        Rectangle {
+                            background: ta_github.has-hover ? Theme.surface : transparent;
+                            border-radius: 8px;
+                            
+                            ta_github := TouchArea {
+                                clicked => { root.open-link("https://github.com/ahmed-x86") }
+                            }
+                            
                             HorizontalLayout {
+                                padding: 12px; 
                                 spacing: 8px;
-                                alignment: end;
+                                alignment: center;
                                 Text { text: "@ahmed-86"; color: Theme.is-dark ? #60a5fa : #3b82f6; font-size: 14px; vertical-alignment: center; }
                                 Image { source: @image-url("icons/github.svg"); width: 20px; height: 20px; colorize: Theme.text; }
                             }

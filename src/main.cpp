@@ -1,15 +1,85 @@
-#include "main.h" // هذا الملف يتم توليده تلقائياً بواسطة CMake و Slint
+#include "main.h" 
 #include "epub_reader.h"
 
-// مكتبة nfd (Native File Dialog) لا تدعم أندرويد إطلاقًا، ولا يتم جلبها/بناؤها
-// له أصلاً (راجع CMakeLists.txt)، لذلك يجب عدم تضمين هيدرها في بناء أندرويد.
-#ifndef ANDROID
+// مكتبة nfd لا تدعم أندرويد
+#ifndef __ANDROID__
 #include <nfd.hpp>
 #endif
+
 #include <iostream>
 #include <memory>
 #include <string>
-#include <cstdlib> // <-- تمت الإضافة لتشغيل أوامر النظام
+#include <cstdlib> 
+
+#ifdef __ANDROID__
+#include <jni.h>
+static JavaVM* g_jvm = nullptr;
+static jobject g_activity = nullptr;
+#endif
+
+// مؤشرات عامة لكي نستطيع الوصول للواجهة والقارئ من داخل JNI (أندرويد)
+static std::shared_ptr<MainWindow> g_ui;
+static std::shared_ptr<EpubReader> g_reader;
+
+// دالة تحديث الواجهة عامة
+void updateReaderUI() {
+    if (!g_ui || !g_reader) return;
+    const auto& meta = g_reader->getMetadata();
+    
+    g_ui->set_book_title(slint::SharedString(meta.title));
+    g_ui->set_book_author(slint::SharedString(meta.author));
+    g_ui->set_chapter_content(slint::SharedString(g_reader->getCurrentChapterContent()));
+    
+    g_ui->set_current_chapter_num(g_reader->getCurrentChapterIndex() + 1);
+    g_ui->set_chapter_count(g_reader->getChapterCount());
+    
+    g_ui->set_can_go_next(g_reader->getCurrentChapterIndex() + 1 < g_reader->getChapterCount());
+    g_ui->set_can_go_prev(g_reader->getCurrentChapterIndex() > 0);
+    
+    g_ui->set_meta_language(slint::SharedString(meta.language));
+    g_ui->set_meta_publisher(slint::SharedString(meta.publisher));
+    g_ui->set_meta_date(slint::SharedString(meta.date));
+    g_ui->set_meta_description(slint::SharedString(meta.description));
+    g_ui->set_meta_subject(slint::SharedString(meta.subject));
+    g_ui->set_meta_rights(slint::SharedString(meta.rights));
+    g_ui->set_meta_identifier(slint::SharedString(meta.identifier));
+    g_ui->set_meta_source(slint::SharedString(meta.source));
+    g_ui->set_meta_format(slint::SharedString(meta.format));
+    g_ui->set_meta_chapters(slint::SharedString(std::to_string(meta.chapterCount)));
+}
+
+#ifdef __ANDROID__
+// ⚠️ تطبيق قاعدة JNI الصارمة: علامة _ في ahmed_x86 تتحول إلى _1 
+extern "C" JNIEXPORT void JNICALL
+Java_com_ahmed_1x86_openlibrary_MainActivity_initJni(JNIEnv *env, jobject thiz) {
+    env->GetJavaVM(&g_jvm);
+    g_activity = env->NewGlobalRef(thiz);
+    std::cout << "[Android JNI] تم تهيئة جسر JNI بنجاح." << std::endl;
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_ahmed_1x86_openlibrary_MainActivity_onFileSelected(JNIEnv *env, jobject /* this */, jstring filePath) {
+    if (!g_ui || !g_reader) return;
+
+    const char *nativeString = env->GetStringUTFChars(filePath, 0);
+    std::string path(nativeString);
+    env->ReleaseStringUTFChars(filePath, nativeString);
+
+    std::cout << "[Android JNI] تم استلام مسار الملف من أندرويد: " << path << std::endl;
+
+    // تنفيذ فتح الكتاب داخل خيط Slint الرئيسي للحماية من الانهيار
+    slint::invoke_from_event_loop([path]() {
+        if (g_reader->open(path)) {
+            std::cout << "[Success] تم فتح الكتاب بنجاح على أندرويد!" << std::endl;
+            updateReaderUI();
+            g_ui->set_reading_mode(true);
+            g_ui->set_show_info(false);
+        } else {
+            std::cerr << "[Error] فشل فتح الملف على أندرويد: " << path << std::endl;
+        }
+    });
+}
+#endif
 
 #ifdef __ANDROID__
 extern "C" void slint_main()
@@ -17,51 +87,11 @@ extern "C" void slint_main()
 int main(int argc, char* argv[])
 #endif
 {
-    // إنشاء نسخة من النافذة الرئيسية
-    auto ui = MainWindow::create();
+    g_ui = MainWindow::create();
+    g_reader = std::make_shared<EpubReader>();
 
-    // قارئ EPUB مشترك
-    auto reader = std::make_shared<EpubReader>();
-
-    // ============================================================
-    // دالة مساعدة: تحديث واجهة القراءة
-    // ============================================================
-    auto updateReaderUI = [&ui, &reader]() {
-        const auto& meta = reader->getMetadata();
-
-        // البيانات الأساسية
-        ui->set_book_title(slint::SharedString(meta.title));
-        ui->set_book_author(slint::SharedString(meta.author));
-        ui->set_chapter_content(slint::SharedString(reader->getCurrentChapterContent()));
-
-        // تحديث أرقام الفصول للواجهة الجديدة
-        ui->set_current_chapter_num(reader->getCurrentChapterIndex() + 1);
-        ui->set_chapter_count(reader->getChapterCount());
-
-        // حالة أزرار التنقل
-        ui->set_can_go_next(reader->getCurrentChapterIndex() + 1 < reader->getChapterCount());
-        ui->set_can_go_prev(reader->getCurrentChapterIndex() > 0);
-
-        // البيانات الوصفية الإضافية
-        ui->set_meta_language(slint::SharedString(meta.language));
-        ui->set_meta_publisher(slint::SharedString(meta.publisher));
-        ui->set_meta_date(slint::SharedString(meta.date));
-        ui->set_meta_description(slint::SharedString(meta.description));
-        ui->set_meta_subject(slint::SharedString(meta.subject));
-        ui->set_meta_rights(slint::SharedString(meta.rights));
-        ui->set_meta_identifier(slint::SharedString(meta.identifier));
-        ui->set_meta_source(slint::SharedString(meta.source));
-        ui->set_meta_format(slint::SharedString(meta.format));
-        ui->set_meta_chapters(slint::SharedString(std::to_string(meta.chapterCount)));
-    };
-
-    // ============================================================
-    // حدث: فتح ملف EPUB
-    // ============================================================
-    ui->on_open_epub_dialog([&ui, &reader, &updateReaderUI]() {
-        std::cout << "[Action] فتح مدير الملفات لاختيار كتاب EPUB..." << std::endl;
-
-#ifndef ANDROID
+    g_ui->on_open_epub_dialog([]() {
+#ifndef __ANDROID__
         NFD::Guard nfdGuard;
         nfdfilteritem_t filterItems[1] = {{"EPUB Books", "epub"}};
         NFD::UniquePath outPath;
@@ -69,113 +99,81 @@ int main(int argc, char* argv[])
 
         if (result == NFD_OKAY) {
             std::string filePath = outPath.get();
-            std::cout << "[Action] تم اختيار: " << filePath << std::endl;
-
-            if (reader->open(filePath)) {
-                std::cout << "[Success] تم فتح الكتاب بنجاح!" << std::endl;
+            if (g_reader->open(filePath)) {
                 updateReaderUI();
-                ui->set_reading_mode(true);
-                ui->set_show_info(false);
-            } else {
-                std::cerr << "[Error] فشل فتح الملف: " << filePath << std::endl;
+                g_ui->set_reading_mode(true);
+                g_ui->set_show_info(false);
             }
-        } else if (result == NFD_CANCEL) {
-            std::cout << "[Action] تم إلغاء اختيار الملف." << std::endl;
-        } else {
-            std::cerr << "[Error] خطأ في مدير الملفات: " << NFD::GetError() << std::endl;
         }
 #else
-        // TODO: مكتبة nfd لا تدعم أندرويد. لازم نضيف اختيار ملفات حقيقي هنا
-        // لاحقًا عبر Storage Access Framework (SAF) من خلال JNI. حاليًا بنسجل
-        // تحذير بس عشان بناء أندرويد ينجح ولحد ما تتضاف الميزة دي فعليًا.
-        std::cerr << "[Warning] اختيار الملفات غير مدعوم حاليًا على أندرويد." << std::endl;
+        // أمر C++ لأندرويد: افتح نافذة الملفات الآن!
+        if (g_jvm && g_activity) {
+            JNIEnv* env;
+            g_jvm->AttachCurrentThread(&env, NULL);
+            jclass clazz = env->GetObjectClass(g_activity);
+            jmethodID methodId = env->GetMethodID(clazz, "openFilePicker", "()V");
+            if (methodId) {
+                env->CallVoidMethod(g_activity, methodId);
+            }
+            g_jvm->DetachCurrentThread();
+        } else {
+            std::cerr << "[Error] لم يتم تهيئة JNI Activity!" << std::endl;
+        }
 #endif
     });
 
-    // ============================================================
-    // حدث: الفصل التالي
-    // ============================================================
-    ui->on_go_next_chapter([&ui, &reader, &updateReaderUI]() {
-        if (reader->nextChapter()) {
-            updateReaderUI();
-            std::cout << "[Nav] الفصل التالي: " << reader->getCurrentChapterIndex() + 1 << std::endl;
-        }
+    g_ui->on_go_next_chapter([]() {
+        if (g_reader->nextChapter()) updateReaderUI();
     });
 
-    // ============================================================
-    // حدث: الفصل السابق
-    // ============================================================
-    ui->on_go_prev_chapter([&ui, &reader, &updateReaderUI]() {
-        if (reader->prevChapter()) {
-            updateReaderUI();
-            std::cout << "[Nav] الفصل السابق: " << reader->getCurrentChapterIndex() + 1 << std::endl;
-        }
+    g_ui->on_go_prev_chapter([]() {
+        if (g_reader->prevChapter()) updateReaderUI();
     });
 
-    // ============================================================
-    // حدث: الانتقال لصفحة محددة (عن طريق الإدخال أو القائمة المنسدلة)
-    // ============================================================
-    ui->on_go_to_chapter([&ui, &reader, &updateReaderUI](int target_chapter) {
-        int max_chapters = reader->getChapterCount();
-        
-        // تطبيق شروط الإدخال: لا يقل عن 1 ولا يزيد عن عدد الصفحات
+    g_ui->on_go_to_chapter([](int target_chapter) {
+        int max_chapters = g_reader->getChapterCount();
         if (target_chapter < 1) target_chapter = 1;
         if (target_chapter > max_chapters) target_chapter = max_chapters;
         
-        // الفهرس في C++ يبدأ من 0
-        if (reader->goToChapter(target_chapter - 1)) {
+        if (g_reader->goToChapter(target_chapter - 1)) {
             updateReaderUI();
-            std::cout << "[Nav] الانتقال للفصل: " << target_chapter << std::endl;
         } else {
-            // إعادة الواجهة للرقم الصحيح في حال حدوث أي خطأ غير متوقع
             updateReaderUI();
         }
     });
 
-    // ============================================================
-    // حدث: العودة للصفحة الرئيسية
-    // ============================================================
-    ui->on_go_back_home([&ui, &reader]() {
-        ui->set_reading_mode(false);
-        ui->set_show_info(false);
-        reader->close();
-        std::cout << "[Action] العودة للصفحة الرئيسية" << std::endl;
+    g_ui->on_go_back_home([]() {
+        g_ui->set_reading_mode(false);
+        g_ui->set_show_info(false);
+        g_reader->close();
     });
 
-    // ============================================================
-    // حدث: فتح الروابط الخارجية (دعم لمعظم المنصات)
-    // ============================================================
-    ui->on_open_link([](slint::SharedString url) {
+    g_ui->on_open_link([](slint::SharedString url) {
         std::string url_str(url);
-        std::cout << "[Action] فتح الرابط: " << url_str << std::endl;
-        
 #if defined(_WIN32)
         std::string cmd = "start " + url_str;
 #elif defined(__APPLE__)
         std::string cmd = "open " + url_str;
+#elif defined(__ANDROID__)
+        std::string cmd = "am start -a android.intent.action.VIEW -d " + url_str;
 #else
-        std::string cmd = "xdg-open " + url_str + " &"; // مناسب لـ Arch ولينكس عموماً
+        std::string cmd = "xdg-open " + url_str + " &";
 #endif
         std::system(cmd.c_str());
     });
 
 #ifndef __ANDROID__
-    // معالجة تمرير الملف من سطر الأوامر
     if (argc > 1) {
         std::string filePath = argv[1];
-        if (reader->open(filePath)) {
-            std::cout << "[Action] تم فتح الملف من سطر الأوامر: " << filePath << std::endl;
+        if (g_reader->open(filePath)) {
             updateReaderUI();
-            ui->set_reading_mode(true);
-            ui->set_show_info(false);
-        } else {
-            std::cerr << "[Error] فشل فتح الملف الممرر: " << filePath << std::endl;
+            g_ui->set_reading_mode(true);
+            g_ui->set_show_info(false);
         }
     }
 #endif
 
-    // تشغيل التطبيق
-    ui->run();
+    g_ui->run();
 
 #ifndef __ANDROID__
     return 0;
