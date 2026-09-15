@@ -5,6 +5,7 @@ plugins {
 android {
     namespace 'com.ahmed_x86.openlibrary'
     compileSdk 34
+    ndkVersion "26.3.11579264"
 
     defaultConfig {
         applicationId "com.ahmed_x86.openlibrary"
