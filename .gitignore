@@ -8,6 +8,9 @@ Makefile
 install_manifest.txt
 compile_commands.json
 CMakeScripts/
+openlibrary_autogen
+CPackSourceConfig.cmake
+CPackConfig.cmake
 
 # Executables
 ./openlibrary
@@ -33,3 +36,6 @@ release.py
 keystore_base64.txt
 openlibrary-release.keystore
 push_release.py
+
+## qt
+.qt/

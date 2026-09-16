@@ -1,16 +1,18 @@
 #include "main.h" 
 #include "epub_reader.h"
 
-// مكتبة nfd لا تدعم أندرويد
-#ifndef __ANDROID__
-#include <nfd.hpp>
-#endif
+#include <QApplication>
+#include <QFileDialog>
+#include <QDesktopServices>
+#include <QUrl>
 
 #include <iostream>
 #include <memory>
 #include <string>
 #include <cstdlib> 
 #include <optional> // تمت الإضافة لدعم التغليف والتأخير في تهيئة المتغير
+#include <array>
+#include <cstdio>
 
 #ifdef __ANDROID__
 #include <jni.h>
@@ -51,6 +53,49 @@ void updateReaderUI() {
     ui->set_meta_chapters(slint::SharedString(std::to_string(meta.chapterCount)));
 }
 
+// ============================================================
+// Linux Desktop: نافذة اختيار ملفات أصلية عبر بوابات xdg-desktop-portal
+// ============================================================
+// على أنظمة Linux ذات مديري نوافذ بسيطة (مثل Hyprland على Wayland)،
+// QFileDialog غالبًا يفشل في تفعيل البوابة الأصلية ويعود لنافذة Qt المدمجة.
+// الحل: استخدام zenity أو kdialog مباشرة عبر popen للحصول على النافذة الأصلية دائمًا.
+#if defined(__linux__) && !defined(__ANDROID__)
+static std::string openNativeLinuxFileDialog() {
+    // محاولة zenity أولاً (GTK/Portal)، ثم kdialog (KDE/Portal)
+    const std::array<const char*, 2> commands = {
+        "zenity --file-selection --title='Open EPUB Book' --file-filter='EPUB Books | *.epub' 2>/dev/null",
+        "kdialog --getopenfilename . 'EPUB Books (*.epub)' --title 'Open EPUB Book' 2>/dev/null"
+    };
+
+    for (const auto* cmd : commands) {
+        FILE* pipe = popen(cmd, "r");
+        if (!pipe) continue;
+
+        std::string result;
+        std::array<char, 512> buffer{};
+        while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe) != nullptr) {
+            result += buffer.data();
+        }
+
+        int status = pclose(pipe);
+
+        // pclose يرجع حالة الخروج — 0 يعني نجاح (المستخدم اختار ملف)
+        // أي قيمة أخرى تعني إلغاء أو فشل
+        if (status == 0 && !result.empty()) {
+            // إزالة سطر جديد من نهاية المسار
+            if (result.back() == '\n') {
+                result.pop_back();
+            }
+            return result;
+        }
+        // إذا الأمر الأول فشل (غير مثبت)، ننتقل للثاني
+    }
+
+    std::cerr << "[Warning] لم يتم العثور على zenity أو kdialog. تأكد من تثبيت أحدهما." << std::endl;
+    return {};
+}
+#endif
+
 #ifdef __ANDROID__
 // ⚠️ تطبيق قاعدة JNI الصارمة: علامة _ في ahmed_x86 تتحول إلى _1 
 extern "C" JNIEXPORT void JNICALL
@@ -90,27 +135,31 @@ extern "C" void slint_main()
 int main(int argc, char* argv[])
 #endif
 {
+#ifndef __ANDROID__
+    // تهيئة Qt قبل أي شيء — ضروري حتى يعمل QFileDialog و QDesktopServices
+    // لن نستدعي QApplication::exec() لأن Slint يدير حلقة الأحداث الخاصة به
+    QApplication qtApp(argc, argv);
+#endif
+
     g_ui = MainWindow::create();
     g_reader = std::make_shared<EpubReader>();
     auto& ui = *g_ui; // مرجع محلي للتعامل مع الواجهة داخل main
 
     ui->on_open_epub_dialog([]() {
-#ifndef __ANDROID__
-        NFD::Guard nfdGuard;
-        nfdfilteritem_t filterItems[1] = {{"EPUB Books", "epub"}};
-        NFD::UniquePath outPath;
-        nfdresult_t result = NFD::OpenDialog(outPath, filterItems, 1);
+#if defined(__linux__) && !defined(__ANDROID__)
+        // Linux Desktop: استخدام zenity/kdialog لضمان نافذة أصلية عبر xdg-desktop-portal
+        // هذا يتجنب مشكلة QFileDialog على مديري نوافذ بسيطة مثل Hyprland
+        std::string filePath = openNativeLinuxFileDialog();
 
-        if (result == NFD_OKAY) {
-            std::string filePath = outPath.get();
+        if (!filePath.empty()) {
             if (g_reader->open(filePath)) {
                 updateReaderUI();
                 (*g_ui)->set_reading_mode(true);
                 (*g_ui)->set_show_info(false);
             }
         }
-#else
-        // أمر C++ لأندرويد: افتح نافذة الملفات الآن!
+#elif defined(__ANDROID__)
+        // أمر C++ لأندرويد: افتح نافذة الملفات عبر جسر JNI
         if (g_jvm && g_activity) {
             JNIEnv* env;
             g_jvm->AttachCurrentThread(&env, NULL);
@@ -122,6 +171,24 @@ int main(int argc, char* argv[])
             g_jvm->DetachCurrentThread();
         } else {
             std::cerr << "[Error] لم يتم تهيئة JNI Activity!" << std::endl;
+        }
+#else
+        // Windows / macOS: استخدام QFileDialog مع النافذة الأصلية للنظام
+        // لا نمرر QFileDialog::DontUseNativeDialog — يستخدم النافذة الأصلية تلقائيًا
+        QString filePath = QFileDialog::getOpenFileName(
+            nullptr,
+            QStringLiteral("Open EPUB Book"),
+            QString(),
+            QStringLiteral("EPUB Books (*.epub)")
+        );
+
+        if (!filePath.isEmpty()) {
+            std::string path = filePath.toStdString();
+            if (g_reader->open(path)) {
+                updateReaderUI();
+                (*g_ui)->set_reading_mode(true);
+                (*g_ui)->set_show_info(false);
+            }
         }
 #endif
     });
@@ -154,16 +221,14 @@ int main(int argc, char* argv[])
 
     ui->on_open_link([](slint::SharedString url) {
         std::string url_str(url);
-#if defined(_WIN32)
-        std::string cmd = "start " + url_str;
-#elif defined(__APPLE__)
-        std::string cmd = "open " + url_str;
-#elif defined(__ANDROID__)
-        std::string cmd = "am start -a android.intent.action.VIEW -d " + url_str;
+#ifndef __ANDROID__
+        // Qt يتكفل بفتح الرابط على Linux/Windows/macOS بشكل موحد
+        QDesktopServices::openUrl(QUrl(QString::fromStdString(url_str)));
 #else
-        std::string cmd = "xdg-open " + url_str + " &";
-#endif
+        // على أندرويد نستخدم أمر النظام مباشرة لأن QApplication غير مُهيأ
+        std::string cmd = "am start -a android.intent.action.VIEW -d " + url_str;
         std::system(cmd.c_str());
+#endif
     });
 
 #ifndef __ANDROID__

@@ -4,6 +4,9 @@ project(OpenLibrary VERSION 1.0 LANGUAGES CXX C)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Qt requires MOC (Meta-Object Compiler) processing
+set(CMAKE_AUTOMOC ON)
+
 # ============================================================
 # المكتبات الخارجية
 # ============================================================
@@ -69,20 +72,8 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(pugixml)
 
-# --- مكتبة nativefiledialog-extended (مدير الملفات) ---
-# ملاحظة: هذه المكتبة لا تدعم أندرويد إطلاقًا (تعتمد على GTK/Win32/Cocoa)،
-# لذلك لازم نستثنيها من مرحلة الجلب والبناء نفسها (FetchContent) وليس فقط من الربط،
-# وإلا فسيحاول CMake بناء nfd_gtk.cpp ضد هيدرز GTK الخاصة بالسيرفر أثناء cross-compile لأندرويد فيفشل.
-if (NOT ANDROID)
-    FetchContent_Declare(
-        nfd
-        GIT_REPOSITORY https://github.com/btzy/nativefiledialog-extended.git
-        GIT_TAG        v1.2.1
-    )
-    set(NFD_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-    set(NFD_INSTALL OFF CACHE BOOL "" FORCE)
-    FetchContent_MakeAvailable(nfd)
-endif()
+# --- Qt6 (بديل nativefiledialog — يستخدم QFileDialog و QDesktopServices) ---
+find_package(Qt6 COMPONENTS Core Gui Widgets REQUIRED)
 
 # ============================================================
 # الملف التنفيذي أو المكتبة (حسب النظام)
@@ -118,12 +109,10 @@ endif()
 target_link_libraries(openlibrary PRIVATE
     Slint::Slint
     pugixml
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
 )
-
-# مكتبة nativefiledialog (nfd) لا تدعم أندرويد، فنستثنيها عند البناء له
-if (NOT ANDROID)
-    target_link_libraries(openlibrary PRIVATE nfd)
-endif()
 
 # ============================================================
 # Installation
@@ -148,13 +137,13 @@ set(CPACK_PACKAGE_CONTACT "ahmed-x86")
 if (WIN32)
     set(CPACK_GENERATOR "NSIS;ZIP")
     set(CPACK_NSIS_EXTRA_INSTALL_COMMANDS "
-        WriteRegStr HKCR \\\".epub\\\" \\\"\\\" \\\"OpenLibrary.EPUB\\\"
-        WriteRegStr HKCR \\\"OpenLibrary.EPUB\\\\shell\\\\open\\\\command\\\" \\\"\\\" \\\"\\\\\\\"$INSTDIR\\\\openlibrary.exe\\\\\\\" \\\\\\\"%1\\\\\\\"\\\"
+        WriteRegStr HKCR \\\\\".epub\\\\\" \\\\\"\\\\\" \\\\\"OpenLibrary.EPUB\\\\\"
+        WriteRegStr HKCR \\\\\"OpenLibrary.EPUB\\\\shell\\\\open\\\\command\\\\\" \\\\\"\\\\\" \\\\\"\\\\\\\\\\\"$INSTDIR\\\\\\\\openlibrary.exe\\\\\\\\\\\" \\\\\\\\\\\\\\\"%1\\\\\\\\\\\\\\\"\\\\\"
     ")
 elseif (UNIX AND NOT APPLE AND NOT ANDROID)
     set(CPACK_GENERATOR "DEB;RPM")
-    set(CPACK_DEBIAN_PACKAGE_DEPENDS "fontconfig, libgtk-3-0")
-    set(CPACK_RPM_PACKAGE_REQUIRES "fontconfig, gtk3")
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS "fontconfig, qt6-base-dev")
+    set(CPACK_RPM_PACKAGE_REQUIRES "fontconfig, qt6-qtbase")
 endif()
 
 include(CPack)
