@@ -18,8 +18,12 @@ public class MainActivity extends NativeActivity {
     private static final String TAG = "OpenLibrary";
 
     // 1. الإعلان عن الدوال الموجودة في كود C++ (JNI)
-    public native void initJni();
-    public native void onFileSelected(String filePath);
+    public native void initJNI();
+    public native void onEpubFileSelected(String filePath);
+
+    static {
+        System.loadLibrary("openlibrary");
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -27,10 +31,10 @@ public class MainActivity extends NativeActivity {
         
         // 2. استدعاء دالة التهيئة لإرسال Activity و JVM إلى C++
         try {
-            initJni();
-            Log.i(TAG, "تم استدعاء initJni بنجاح.");
+            initJNI(); // يتم إرسال "this" تلقائياً في JNI كمعامل jobject
+            Log.i(TAG, "تم استدعاء initJNI بنجاح.");
         } catch (UnsatisfiedLinkError e) {
-            Log.e(TAG, "فشل استدعاء initJni. هل تم تحميل المكتبة؟", e);
+            Log.e(TAG, "فشل استدعاء initJNI. هل تم تحميل المكتبة؟", e);
         }
     }
 
@@ -91,7 +95,7 @@ public class MainActivity extends NativeActivity {
                     String realPath = copyFileToCache(uri);
                     if (realPath != null) {
                         Log.i(TAG, "تم نسخ الملف بنجاح إلى: " + realPath);
-                        onFileSelected(realPath);
+                        onEpubFileSelected(realPath);
                     } else {
                         Log.e(TAG, "فشل في الحصول على المسار الحقيقي للملف.");
                     }

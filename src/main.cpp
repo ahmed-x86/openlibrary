@@ -101,14 +101,14 @@ static std::string openNativeLinuxFileDialog() {
 #ifdef __ANDROID__
 // ⚠️ تطبيق قاعدة JNI الصارمة: علامة _ في ahmed_x86 تتحول إلى _1 
 extern "C" JNIEXPORT void JNICALL
-Java_com_ahmed_1x86_openlibrary_MainActivity_initJni(JNIEnv *env, jobject thiz) {
+Java_com_ahmed_1x86_openlibrary_MainActivity_initJNI(JNIEnv *env, jobject thiz) {
     env->GetJavaVM(&g_jvm);
     g_activity = env->NewGlobalRef(thiz);
     std::cout << "[Android JNI] تم تهيئة جسر JNI بنجاح." << std::endl;
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_ahmed_1x86_openlibrary_MainActivity_onFileSelected(JNIEnv *env, jobject /* this */, jstring filePath) {
+Java_com_ahmed_1x86_openlibrary_MainActivity_onEpubFileSelected(JNIEnv *env, jobject /* this */, jstring filePath) {
     if (!g_ui || !g_reader) return;
 
     const char *nativeString = env->GetStringUTFChars(filePath, 0);
