@@ -7,6 +7,10 @@ import android.os.Bundle;
 import android.util.Log;
 import android.app.Activity;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+
 // استخدام NativeActivity لأن Slint يعتمد عليها عادة، أو Activity عادية إذا كنت تستخدم بنية مختلفة
 public class MainActivity extends NativeActivity {
 
@@ -47,6 +51,32 @@ public class MainActivity extends NativeActivity {
         }
     }
 
+    private String copyFileToCache(Uri uri) {
+        try {
+            InputStream inputStream = getContentResolver().openInputStream(uri);
+            if (inputStream == null) return null;
+
+            File cacheDir = getCacheDir();
+            File tempFile = new File(cacheDir, "temp_book.epub");
+            
+            FileOutputStream outputStream = new FileOutputStream(tempFile);
+            byte[] buffer = new byte[8192];
+            int length;
+            while ((length = inputStream.read(buffer)) > 0) {
+                outputStream.write(buffer, 0, length);
+            }
+            
+            outputStream.flush();
+            outputStream.close();
+            inputStream.close();
+            
+            return tempFile.getAbsolutePath();
+        } catch (Exception e) {
+            Log.e(TAG, "فشل نسخ الملف إلى الكاش", e);
+            return null;
+        }
+    }
+
     // 4. هذه الدالة تستقبل الملف الذي اختاره المستخدم وترسله إلى C++
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
@@ -58,9 +88,13 @@ public class MainActivity extends NativeActivity {
                 if (uri != null) {
                     Log.i(TAG, "تم اختيار الملف: " + uri.toString());
                     
-                    // تحذير: أندرويد سيرجع مسار من نوع content:// وليس مسار حقيقي (مثل /storage/...)
-                    // سنرسل المسار مؤقتاً لنتأكد أن الجسر يعمل. في الخطوة القادمة سنحتاج لنسخ هذا الـ content:// إلى مسار حقيقي ليتمكن C++ من قراءته.
-                    onFileSelected(uri.toString());
+                    String realPath = copyFileToCache(uri);
+                    if (realPath != null) {
+                        Log.i(TAG, "تم نسخ الملف بنجاح إلى: " + realPath);
+                        onFileSelected(realPath);
+                    } else {
+                        Log.e(TAG, "فشل في الحصول على المسار الحقيقي للملف.");
+                    }
                 }
             }
         }

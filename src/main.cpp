@@ -1,10 +1,12 @@
 #include "main.h" 
 #include "epub_reader.h"
 
+#ifndef __ANDROID__
 #include <QApplication>
 #include <QFileDialog>
 #include <QDesktopServices>
 #include <QUrl>
+#endif
 
 #include <iostream>
 #include <memory>

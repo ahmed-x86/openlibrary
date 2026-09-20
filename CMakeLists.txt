@@ -73,7 +73,9 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(pugixml)
 
 # --- Qt6 (بديل nativefiledialog — يستخدم QFileDialog و QDesktopServices) ---
-find_package(Qt6 COMPONENTS Core Gui Widgets REQUIRED)
+if (NOT ANDROID)
+    find_package(Qt6 COMPONENTS Core Gui Widgets REQUIRED)
+endif()
 
 # ============================================================
 # الملف التنفيذي أو المكتبة (حسب النظام)
@@ -109,10 +111,15 @@ endif()
 target_link_libraries(openlibrary PRIVATE
     Slint::Slint
     pugixml
-    Qt6::Core
-    Qt6::Gui
-    Qt6::Widgets
 )
+
+if (NOT ANDROID)
+    target_link_libraries(openlibrary PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Widgets
+    )
+endif()
 
 # ============================================================
 # Installation
