@@ -20,7 +20,8 @@ android {
             }
         }
         ndk {
-            // ✅ تم إضافة x86 هنا حتى لا يتخطى Gradle بناء هذه المعمارية
+            // x86: يستخدم Slint Software Renderer بدلاً من Skia (تجنباً لـ ABI mismatch على 32-bit)
+            // arm64-v8a, armeabi-v7a, x86_64: يستخدمون Skia renderer (الافتراضي)
             abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64', 'x86'
         }
     }

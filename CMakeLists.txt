@@ -21,6 +21,15 @@ if (NOT Slint_FOUND)
         GIT_TAG        release/1
         SOURCE_SUBDIR  api/cpp
     )
+
+    # على x86 Android يوجد خطأ معروف في skia-bindings: أحجام الـ structs مختلفة
+    # بين C++ وRust على 32-bit x86، مما يسبب compile-time assertion failures.
+    # الحل: تفعيل Software Renderer وتعطيل Skia لـ x86 فقط.
+    if (ANDROID AND ANDROID_ABI STREQUAL "x86")
+        set(SLINT_FEATURE_RENDERER_SKIA OFF CACHE BOOL "Disable Skia renderer for x86 (ABI mismatch)" FORCE)
+        set(SLINT_FEATURE_RENDERER_SOFTWARE ON CACHE BOOL "Enable software renderer for x86" FORCE)
+    endif()
+
     FetchContent_MakeAvailable(Slint)
 endif()
 
