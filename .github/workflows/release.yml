@@ -201,7 +201,7 @@ jobs:
         run: |
           apk update
           apk add --no-cache build-base cmake pkgconf rust cargo patchelf upx fontconfig-dev gtk+3.0-dev git ninja \
-            qt6-base-dev
+            qt6-qtbase-dev
 
       - name: Build Project
         run: |
