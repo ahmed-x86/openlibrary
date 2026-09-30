@@ -406,7 +406,8 @@ jobs:
           url="https://github.com/ahmed-x86/openlibrary"
           arch="x86_64"
           license="GPL"
-          depends="fontconfig gtk+3.0"
+          depends="fontconfig qt6-qtbase"
+          makedepends="qt6-qtbase-dev"
           options="!strip !check"
           source="openlibrary-$pkgver.tar.gz"
 
@@ -749,8 +750,7 @@ jobs:
             rust_target: aarch64-linux-android
           - arch: armeabi-v7a
             rust_target: armv7-linux-androideabi
-          - arch: x86
-            rust_target: i686-linux-android
+
           - arch: x86_64
             rust_target: x86_64-linux-android
     steps:
@@ -907,9 +907,9 @@ jobs:
 
             echo "### 🤖 أندرويد"
             echo ""
-            echo "| التحميل \\ المعمارية | x86 ¹ | x86_64 | armv7 | armv8 | 🌐 عام (Universal) |"
-            echo "|:---|:---:|:---:|:---:|:---:|:---:|"
-            echo "| **APK** | $(cell OpenLibrary-Android-x86.apk) | $(cell OpenLibrary-Android-x86_64.apk) | $(cell OpenLibrary-Android-armeabi-v7a.apk) | $(cell OpenLibrary-Android-arm64-v8a.apk) | $(cell OpenLibrary-Android.apk) |"
+            echo "| التحميل \\ المعمارية | x86_64 | armv7 | armv8 | 🌐 عام (Universal) |"
+            echo "|:---|:---:|:---:|:---:|:---:|"
+            echo "| **APK** | $(cell OpenLibrary-Android-x86_64.apk) | $(cell OpenLibrary-Android-armeabi-v7a.apk) | $(cell OpenLibrary-Android-arm64-v8a.apk) | $(cell OpenLibrary-Android.apk) |"
             echo ""
 
             echo "### 🪟 ويندوز"
@@ -952,7 +952,6 @@ jobs:
             artifacts/OpenLibrary-Void-glibc.xbps
             artifacts/OpenLibrary-Void-musl.xbps
             artifacts/OpenLibrary-Alpine.apk
-            artifacts/OpenLibrary-Android-x86.apk
             artifacts/OpenLibrary-Android-x86_64.apk
             artifacts/OpenLibrary-Android-armeabi-v7a.apk
             artifacts/OpenLibrary-Android-arm64-v8a.apk
