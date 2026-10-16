@@ -425,7 +425,7 @@ jobs:
           chmod +x build-src/openlibrary
           chown -R builder:builder apk-pkg
           cd apk-pkg
-          su builder -c "cd \$(pwd) && abuild checksum && abuild -r"
+          su builder -c "cd $(pwd) && abuild checksum && abuild -r"
           find ~builder/packages -name "*.apk" -exec cp {} ../OpenLibrary-Alpine.apk \;
 
       - name: Upload Alpine .apk Artifact
@@ -563,7 +563,7 @@ jobs:
               for lib in *.so*; do
                   [ -e "$lib" ] && install -Dm755 "$lib" "${pkgdir}/usr/lib/openlibrary/$lib"
               done
-              install -Dm644 openlibrary.desktop "\${pkgdir}/usr/share/applications/openlibrary.desktop"
+              install -Dm644 openlibrary.desktop "${pkgdir}/usr/share/applications/openlibrary.desktop"
           }
           EOF
           sed -i 's/^          //' arch-pkg/PKGBUILD
@@ -613,13 +613,13 @@ jobs:
       - name: Prepare Package Root (glibc)
         run: |
           PKG_ROOT="void-pkg-root"
-          mkdir -p "\${PKG_ROOT}/usr/bin"
-          mkdir -p "\${PKG_ROOT}/usr/lib/openlibrary"
-          mkdir -p "\${PKG_ROOT}/usr/share/applications"
-          cp build-src-glibc/openlibrary "\${PKG_ROOT}/usr/bin/openlibrary"
-          chmod +x "\${PKG_ROOT}/usr/bin/openlibrary"
-          find build-src-glibc/ -name "*.so*" -exec cp -a {} "\${PKG_ROOT}/usr/lib/openlibrary/" \; || true
-          cp openlibrary.desktop "\${PKG_ROOT}/usr/share/applications/"
+          mkdir -p "${PKG_ROOT}/usr/bin"
+          mkdir -p "${PKG_ROOT}/usr/lib/openlibrary"
+          mkdir -p "${PKG_ROOT}/usr/share/applications"
+          cp build-src-glibc/openlibrary "${PKG_ROOT}/usr/bin/openlibrary"
+          chmod +x "${PKG_ROOT}/usr/bin/openlibrary"
+          find build-src-glibc/ -name "*.so*" -exec cp -a {} "${PKG_ROOT}/usr/lib/openlibrary/" \; || true
+          cp openlibrary.desktop "${PKG_ROOT}/usr/share/applications/"
 
       - name: Build glibc .xbps Package with xbps-create
         run: |
@@ -643,13 +643,13 @@ jobs:
       - name: Prepare Package Root (musl)
         run: |
           PKG_ROOT="void-pkg-root-musl"
-          mkdir -p "\${PKG_ROOT}/usr/bin"
-          mkdir -p "\${PKG_ROOT}/usr/lib/openlibrary"
-          mkdir -p "\${PKG_ROOT}/usr/share/applications"
-          cp build-src-musl/openlibrary "\${PKG_ROOT}/usr/bin/openlibrary"
-          chmod +x "\${PKG_ROOT}/usr/bin/openlibrary"
-          find build-src-musl/ -name "*.so*" -exec cp -a {} "\${PKG_ROOT}/usr/lib/openlibrary/" \; || true
-          cp openlibrary.desktop "\${PKG_ROOT}/usr/share/applications/"
+          mkdir -p "${PKG_ROOT}/usr/bin"
+          mkdir -p "${PKG_ROOT}/usr/lib/openlibrary"
+          mkdir -p "${PKG_ROOT}/usr/share/applications"
+          cp build-src-musl/openlibrary "${PKG_ROOT}/usr/bin/openlibrary"
+          chmod +x "${PKG_ROOT}/usr/bin/openlibrary"
+          find build-src-musl/ -name "*.so*" -exec cp -a {} "${PKG_ROOT}/usr/lib/openlibrary/" \; || true
+          cp openlibrary.desktop "${PKG_ROOT}/usr/share/applications/"
 
       - name: Build musl .xbps Package with xbps-create
         run: |
@@ -702,17 +702,34 @@ jobs:
           version: '6.7.*'
           host: 'linux'
           target: 'desktop'
-          arch: 'gcc_64'
+          arch: 'linux_gcc_64'
           cache: true
 
-      - name: Install Qt6 Android (All ABIs)
-        id: qt-android
+      - name: Install Qt6 Android (android_arm64_v8a)
         uses: jurplel/install-qt-action@v4
         with:
           version: '6.7.*'
           host: 'linux'
           target: 'android'
-          arch: 'android_arm64_v8a android_armv7 android_x86_64'
+          arch: 'android_arm64_v8a'
+          cache: true
+
+      - name: Install Qt6 Android (android_armv7)
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.7.*'
+          host: 'linux'
+          target: 'android'
+          arch: 'android_armv7'
+          cache: true
+
+      - name: Install Qt6 Android (android_x86_64)
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.7.*'
+          host: 'linux'
+          target: 'android'
+          arch: 'android_x86_64'
           cache: true
 
       - name: Configure Gradle CMake for Qt6 Android
@@ -720,37 +737,37 @@ jobs:
           QT_BASE_DIR=$(dirname "${{ steps.qt-host.outputs.qt-root-dir }}")
           cat >> android/app/build.gradle <<EOF
           android.defaultConfig.externalNativeBuild.cmake {
-              arguments "-DQT_HOST_PATH=\${QT_BASE_DIR}/gcc_64"
+              arguments "-DQT_HOST_PATH=${QT_BASE_DIR}/gcc_64"
           }
           EOF
 
       - name: Decode Keystore
         env:
-          ANDROID_KEYSTORE_BASE64: \${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
-          echo "\$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
 
       - name: Build APK (Universal)
         env:
-          ANDROID_NDK_HOME: \${{ steps.setup-ndk.outputs.ndk-path }}
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
           KEYSTORE_PATH: "release.keystore"
-          KEYSTORE_PASSWORD: \${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: \${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD: \${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           QT_BASE_DIR=$(dirname "${{ steps.qt-host.outputs.qt-root-dir }}")
-          export CMAKE_PREFIX_PATH="\${QT_BASE_DIR}/android_arm64_v8a;${QT_BASE_DIR}/android_armv7;${QT_BASE_DIR}/android_x86_64"
+          export CMAKE_PREFIX_PATH="${QT_BASE_DIR}/android_arm64_v8a;${QT_BASE_DIR}/android_armv7;${QT_BASE_DIR}/android_x86_64"
           cd android
           gradle assembleRelease
 
       - name: Find and Copy APK
         run: |
-          APK_PATH=\$(find android -type f -name "*.apk" | grep -v "unaligned" | head -n 1)
-          if [ -z "\$APK_PATH" ]; then
+          APK_PATH=$(find android -type f -name "*.apk" | grep -v "unaligned" | head -n 1)
+          if [ -z "$APK_PATH" ]; then
             echo "::error::لم يتم إيجاد ملف APK!"
             exit 1
           fi
-          cp "\$APK_PATH" OpenLibrary-Android.apk
+          cp "$APK_PATH" OpenLibrary-Android.apk
 
       - name: Upload Android Artifact
         uses: actions/upload-artifact@v4
@@ -760,7 +777,7 @@ jobs:
 
   # ===== أندرويد - بناء مخصص لكل معمارية (Matrix) =====
   build-android:
-    name: Build Android APK (\${{ matrix.arch }})
+    name: Build Android APK (${{ matrix.arch }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -800,17 +817,17 @@ jobs:
           version: '6.7.*'
           host: 'linux'
           target: 'desktop'
-          arch: 'gcc_64'
+          arch: 'linux_gcc_64'
           cache: true
 
-      - name: Install Qt6 Android (\${{ matrix.qt_arch }})
+      - name: Install Qt6 Android (${{ matrix.qt_arch }})
         id: qt-android
         uses: jurplel/install-qt-action@v4
         with:
           version: '6.7.*'
           host: 'linux'
           target: 'android'
-          arch: \${{ matrix.qt_arch }}
+          arch: ${{ matrix.qt_arch }}
           cache: true
 
       - name: Configure Gradle CMake for Qt6 Android
@@ -818,31 +835,31 @@ jobs:
           QT_BASE_DIR=$(dirname "${{ steps.qt-host.outputs.qt-root-dir }}")
           cat >> android/app/build.gradle <<EOF
           android.defaultConfig.externalNativeBuild.cmake {
-              arguments "-DQT_HOST_PATH=\${QT_BASE_DIR}/gcc_64", "-DCMAKE_PREFIX_PATH=${QT_BASE_DIR}/${{ matrix.qt_arch }}"
+              arguments "-DQT_HOST_PATH=${QT_BASE_DIR}/gcc_64", "-DCMAKE_PREFIX_PATH=${QT_BASE_DIR}/${{ matrix.qt_arch }}"
           }
           EOF
 
       - name: Decode Keystore
         env:
-          ANDROID_KEYSTORE_BASE64: \${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
-          echo "\$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
 
-      - name: Build APK (\${{ matrix.arch }})
+      - name: Build APK (${{ matrix.arch }})
         env:
-          ANDROID_NDK_HOME: \${{ steps.setup-ndk.outputs.ndk-path }}
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
           KEYSTORE_PATH: "release.keystore"
-          KEYSTORE_PASSWORD: \${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: \${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD: \${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           cd android
-          gradle assembleRelease -Pandroid.injected.build.abi=\${{ matrix.arch }} -Pandroid.injected.testOnly=false
+          gradle assembleRelease -Pandroid.injected.build.abi=${{ matrix.arch }} -Pandroid.injected.testOnly=false
 
       - name: Find and Copy APK
         run: |
-          APK_PATH=\$(find android -type f -name "*.apk" | grep -v "unaligned" | head -n 1)
-          if [ -z "\$APK_PATH" ]; then
+          APK_PATH=$(find android -type f -name "*.apk" | grep -v "unaligned" | head -n 1)
+          if [ -z "$APK_PATH" ]; then
             echo "::error::لم يتم إيجاد ملف APK!"
             exit 1
           fi
@@ -851,8 +868,8 @@ jobs:
       - name: Upload Android Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: OpenLibrary-Android-\${{ matrix.arch }}
-          path: OpenLibrary-Android-\${{ matrix.arch }}.apk
+          name: OpenLibrary-Android-${{ matrix.arch }}
+          path: OpenLibrary-Android-${{ matrix.arch }}.apk
 
   # ===== ويندوز =====
   build-windows:
@@ -874,7 +891,7 @@ jobs:
 
       - name: Build Project
         run: |
-          cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="\${{ env.QT_ROOT_DIR }}"
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="${{ env.QT_ROOT_DIR }}"
           cmake --build build --config Release
 
       - name: Package Windows with windeployqt
@@ -882,7 +899,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path OpenLibrary-Windows
           Copy-Item build\Release\openlibrary.exe -Destination OpenLibrary-Windows\
-          & "\${{ env.QT_ROOT_DIR }}\bin\windeployqt.exe" --release --no-translations --qmldir ui OpenLibrary-Windows\openlibrary.exe
+          & "${{ env.QT_ROOT_DIR }}\bin\windeployqt.exe" --release --no-translations --qmldir ui OpenLibrary-Windows\openlibrary.exe
           upx --best --lzma OpenLibrary-Windows\openlibrary.exe
           Compress-Archive -Path OpenLibrary-Windows\* -DestinationPath OpenLibrary-Windows.zip
 
@@ -908,24 +925,24 @@ jobs:
       - name: Generate Download Table
         id: notes
         run: |
-          TAG="\${{ github.ref_name }}"
-          REPO="\${{ github.repository }}"
+          TAG="${{ github.ref_name }}"
+          REPO="${{ github.repository }}"
           BASE_URL="https://github.com/${REPO}/releases/download/${TAG}"
 
           cell() {
-            local file="\$1"
-            local path="artifacts/\${file}"
-            if [ -f "\$path" ]; then
+            local file="$1"
+            local path="artifacts/${file}"
+            if [ -f "$path" ]; then
               local size
               size=$(du -h "$path" | cut -f1 | sed 's/[[:space:]]*//g')
-              echo "[\${size}](${BASE_URL}/${file})"
+              echo "[${size}](${BASE_URL}/${file})"
             else
               echo "-----"
             fi
           }
 
           {
-            echo "## 📦 OpenLibrary \${TAG}"
+            echo "## 📦 OpenLibrary ${TAG}"
             echo ""
             echo "اختر النسخة المناسبة لجهازك من الجدول تحت وحمّلها مباشرة (الحجم نفسه هو رابط التحميل) 👇"
             echo ""
@@ -935,7 +952,7 @@ jobs:
             echo "| المكتبة \\ الصيغة | ELF | .tar.gz | .deb | .rpm | .pkg.tar.zst | .xbps | .apk |"
             echo "|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|"
             echo "| **glibc** | $(cell openlibrary-elf-glibc) |$(cell OpenLibrary-Linux-Portable.tar.gz) | $(cell OpenLibrary-Linux.deb) |$(cell OpenLibrary-Linux.rpm) | $(cell OpenLibrary-Linux.pkg.tar.zst) |$(cell OpenLibrary-Void-glibc.xbps) | ----- |"
-            echo "| **musl**  | \$(cell openlibrary-elf-musllibc) | $(cell OpenLibrary-Linux-musl-Portable.tar.gz) |$(cell OpenLibrary-Linux-musl.deb) | $(cell OpenLibrary-Linux-musl.rpm) |$(cell OpenLibrary-Linux-musl.pkg.tar.zst) | $(cell OpenLibrary-Void-musl.xbps) |$(cell OpenLibrary-Alpine.apk) |"
+            echo "| **musl**  | $(cell openlibrary-elf-musllibc) | $(cell OpenLibrary-Linux-musl-Portable.tar.gz) |$(cell OpenLibrary-Linux-musl.deb) | $(cell OpenLibrary-Linux-musl.rpm) |$(cell OpenLibrary-Linux-musl.pkg.tar.zst) | $(cell OpenLibrary-Void-musl.xbps) |$(cell OpenLibrary-Alpine.apk) |"
             echo ""
 
             echo "### 🤖 أندرويد"
@@ -949,7 +966,7 @@ jobs:
             echo ""
             echo "| الصيغة \\ المعمارية | x86_64 |"
             echo "|:---|:---:|"
-            echo "| **أرشيف (exe)** | \$(cell OpenLibrary-Windows.zip) |"
+            echo "| **أرشيف (exe)** | $(cell OpenLibrary-Windows.zip) |"
             echo ""
             echo "---"
             echo ""
@@ -995,4 +1012,4 @@ jobs:
           prerelease: false
           generate_release_notes: true
         env:
-          GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
