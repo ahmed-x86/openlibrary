@@ -23,36 +23,35 @@ jobs:
       - name: Install System Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake build-essential pkg-config patchelf upx-ucl libfontconfig1-dev libgtk-3-dev \
-            qt6-base-dev libqt6core6 libqt6gui6 libqt6widgets6
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+          sudo apt-get install -y cmake build-essential pkg-config patchelf upx-ucl libfontconfig1-dev \
+            qt6-base-dev qt6-declarative-dev libqt6svg6-dev \
+            libqt6core6 libqt6gui6 libqt6widgets6 libqt6qml6 libqt6quick6 libqt6quickcontrols2-6 libqt6svg6 \
+            qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-layouts qml6-module-qtquick-window
 
       - name: Build Project
         run: |
           cmake -B build -DCMAKE_BUILD_TYPE=Release
-          cmake --build build --config Release
+          cmake --build build --config Release -j$(nproc)
 
       - name: Stage shared libraries from build tree
         run: |
           mkdir -p staging
           cp build/openlibrary staging/
-          find build/ \( -name "libnfd.so*" -o -name "libpugixml.so*" -o -name "libslint_cpp.so*" \) -exec cp -a {} staging/ \;
+          find build/ -name "*.so*" -exec cp -a {} staging/ \; || true
           echo "=== Staged files ==="
           ls -la staging/
 
       - name: Create Portable Archive (patchelf + $ORIGIN)
         run: |
           mkdir -p portable/OpenLibrary
-          cp staging/* portable/OpenLibrary/
+          cp -a staging/* portable/OpenLibrary/
           patchelf --set-rpath '$ORIGIN' portable/OpenLibrary/openlibrary
           tar czf OpenLibrary-Linux-Portable.tar.gz -C portable OpenLibrary
 
       - name: Prepare package-ready binary (RPATH = /usr/lib/openlibrary)
         run: |
           mkdir -p pkg-staging
-          cp staging/* pkg-staging/
+          cp -a staging/* pkg-staging/
           patchelf --set-rpath '/usr/lib/openlibrary' pkg-staging/openlibrary
 
       - name: Compress standalone ELF Binary
@@ -104,7 +103,7 @@ jobs:
       # بناء حزمة .deb
       - name: Build .deb Package
         run: |
-          PKG_ROOT="deb-build/openlibrary_1.0.0_amd64"
+          PKG_ROOT="deb-build/openlibrary_1.25_amd64"
           mkdir -p "${PKG_ROOT}/DEBIAN"
           mkdir -p "${PKG_ROOT}/usr/bin"
           mkdir -p "${PKG_ROOT}/usr/lib/openlibrary"
@@ -112,12 +111,12 @@ jobs:
           mkdir -p "${PKG_ROOT}/usr/share/icons/hicolor/256x256/apps"
 
           cp openlibrary-bin "${PKG_ROOT}/usr/bin/openlibrary"
-          find build-src/ \( -name "libnfd.so*" -o -name "libpugixml.so*" -o -name "libslint_cpp.so*" \) -exec cp -a {} "${PKG_ROOT}/usr/lib/openlibrary/" \;
+          find build-src/ -name "*.so*" -exec cp -a {} "${PKG_ROOT}/usr/lib/openlibrary/" \; || true
           cp openlibrary.desktop "${PKG_ROOT}/usr/share/applications/"
 
           cat > "${PKG_ROOT}/DEBIAN/control" <<EOF
           Package: openlibrary
-          Version: 1.0.0
+          Version: 1.25
           Architecture: amd64
           Maintainer: ahmed-x86
           Description: OpenLibrary - Open source epub reader
@@ -142,19 +141,19 @@ jobs:
         run: |
           mkdir -p rpmbuild/{SPECS,SOURCES,BUILD,RPMS,SRPMS}
 
-          mkdir -p rpmbuild/SOURCES/openlibrary-1.0.0
-          cp openlibrary-bin rpmbuild/SOURCES/openlibrary-1.0.0/openlibrary
-          find build-src/ \( -name "libnfd.so*" -o -name "libpugixml.so*" -o -name "libslint_cpp.so*" \) -exec cp -a {} rpmbuild/SOURCES/openlibrary-1.0.0/ \;
-          cp openlibrary.desktop rpmbuild/SOURCES/openlibrary-1.0.0/
-          tar -czf rpmbuild/SOURCES/openlibrary-1.0.0.tar.gz -C rpmbuild/SOURCES openlibrary-1.0.0
+          mkdir -p rpmbuild/SOURCES/openlibrary-1.25
+          cp openlibrary-bin rpmbuild/SOURCES/openlibrary-1.25/openlibrary
+          find build-src/ -name "*.so*" -exec cp -a {} rpmbuild/SOURCES/openlibrary-1.25/ \; || true
+          cp openlibrary.desktop rpmbuild/SOURCES/openlibrary-1.25/
+          tar -czf rpmbuild/SOURCES/openlibrary-1.25.tar.gz -C rpmbuild/SOURCES openlibrary-1.25
 
           cat > rpmbuild/SPECS/openlibrary.spec <<'SPEC'
           Name:           openlibrary
-          Version:        1.0.0
+          Version:        1.25
           Release:        1%{?dist}
           Summary:        Open source epub reader
           License:        GPL
-          Source0:        openlibrary-1.0.0.tar.gz
+          Source0:        openlibrary-1.25.tar.gz
 
           %description
           OpenLibrary - قارئ كتب إلكترونية مفتوح المصدر
@@ -200,8 +199,8 @@ jobs:
       - name: Install System Dependencies
         run: |
           apk update
-          apk add --no-cache build-base cmake pkgconf rust cargo patchelf upx fontconfig-dev gtk+3.0-dev git ninja \
-            qt6-qtbase-dev
+          apk add --no-cache build-base cmake pkgconf patchelf upx fontconfig-dev git ninja \
+            qt6-qtbase-dev qt6-qtdeclarative-dev qt6-qtsvg-dev
 
       - name: Build Project
         run: |
@@ -212,21 +211,21 @@ jobs:
         run: |
           mkdir -p staging
           cp build/openlibrary staging/
-          find build/ \( -name "libnfd.so*" -o -name "libpugixml.so*" -o -name "libslint_cpp.so*" \) -exec cp -a {} staging/ \;
+          find build/ -name "*.so*" -exec cp -a {} staging/ \; || true
           echo "=== Staged files ==="
           ls -la staging/
 
       - name: Create Portable Archive (patchelf + $ORIGIN)
         run: |
           mkdir -p portable/OpenLibrary
-          cp staging/* portable/OpenLibrary/
+          cp -a staging/* portable/OpenLibrary/
           patchelf --set-rpath '$ORIGIN' portable/OpenLibrary/openlibrary
           tar czf OpenLibrary-Linux-musl-Portable.tar.gz -C portable OpenLibrary
 
       - name: Prepare package-ready binary (RPATH = /usr/lib/openlibrary)
         run: |
           mkdir -p pkg-staging
-          cp staging/* pkg-staging/
+          cp -a staging/* pkg-staging/
           patchelf --set-rpath '/usr/lib/openlibrary' pkg-staging/openlibrary
 
       - name: Compress standalone musl ELF Binary
@@ -277,19 +276,19 @@ jobs:
 
       - name: Build .deb Package
         run: |
-          PKG_ROOT="deb-build/openlibrary_1.0.0_amd64"
+          PKG_ROOT="deb-build/openlibrary_1.25_amd64"
           mkdir -p "${PKG_ROOT}/DEBIAN"
           mkdir -p "${PKG_ROOT}/usr/bin"
           mkdir -p "${PKG_ROOT}/usr/lib/openlibrary"
           mkdir -p "${PKG_ROOT}/usr/share/applications"
 
           cp openlibrary-bin "${PKG_ROOT}/usr/bin/openlibrary"
-          find build-src/ \( -name "libnfd.so*" -o -name "libpugixml.so*" -o -name "libslint_cpp.so*" \) -exec cp -a {} "${PKG_ROOT}/usr/lib/openlibrary/" \;
+          find build-src/ -name "*.so*" -exec cp -a {} "${PKG_ROOT}/usr/lib/openlibrary/" \; || true
           cp openlibrary.desktop "${PKG_ROOT}/usr/share/applications/"
 
           cat > "${PKG_ROOT}/DEBIAN/control" <<EOF
           Package: openlibrary
-          Version: 1.0.0
+          Version: 1.25
           Architecture: amd64
           Maintainer: ahmed-x86
           Description: OpenLibrary - Open source epub reader (musl build)
@@ -311,19 +310,19 @@ jobs:
       - name: Build .rpm Package
         run: |
           mkdir -p rpmbuild/{SPECS,SOURCES,BUILD,RPMS,SRPMS}
-          mkdir -p rpmbuild/SOURCES/openlibrary-1.0.0
-          cp openlibrary-bin rpmbuild/SOURCES/openlibrary-1.0.0/openlibrary
-          find build-src/ \( -name "libnfd.so*" -o -name "libpugixml.so*" -o -name "libslint_cpp.so*" \) -exec cp -a {} rpmbuild/SOURCES/openlibrary-1.0.0/ \;
-          cp openlibrary.desktop rpmbuild/SOURCES/openlibrary-1.0.0/
-          tar -czf rpmbuild/SOURCES/openlibrary-1.0.0.tar.gz -C rpmbuild/SOURCES openlibrary-1.0.0
+          mkdir -p rpmbuild/SOURCES/openlibrary-1.25
+          cp openlibrary-bin rpmbuild/SOURCES/openlibrary-1.25/openlibrary
+          find build-src/ -name "*.so*" -exec cp -a {} rpmbuild/SOURCES/openlibrary-1.25/ \; || true
+          cp openlibrary.desktop rpmbuild/SOURCES/openlibrary-1.25/
+          tar -czf rpmbuild/SOURCES/openlibrary-1.25.tar.gz -C rpmbuild/SOURCES openlibrary-1.25
 
           cat > rpmbuild/SPECS/openlibrary.spec <<'SPEC'
           Name:           openlibrary
-          Version:        1.0.0
+          Version:        1.25
           Release:        1%{?dist}
           Summary:        Open source epub reader (musl build)
           License:        GPL
-          Source0:        openlibrary-1.0.0.tar.gz
+          Source0:        openlibrary-1.25.tar.gz
 
           %description
           OpenLibrary - قارئ كتب إلكترونية مفتوح المصدر
@@ -391,23 +390,22 @@ jobs:
         run: |
           mkdir -p apk-pkg
 
-          # إنشاء أرشيف مصدر يحتوي على الملف التنفيذي والمكتبات المشتركة
-          mkdir -p apk-src/openlibrary-1.0.0
-          cp build-src/openlibrary apk-src/openlibrary-1.0.0/
-          find build-src/ \( -name "libnfd.so*" -o -name "libpugixml.so*" -o -name "libslint_cpp.so*" \) -exec cp -a {} apk-src/openlibrary-1.0.0/ \;
-          cp openlibrary.desktop apk-src/openlibrary-1.0.0/
-          tar czf apk-pkg/openlibrary-1.0.0.tar.gz -C apk-src openlibrary-1.0.0
+          mkdir -p apk-src/openlibrary-1.25
+          cp build-src/openlibrary apk-src/openlibrary-1.25/
+          find build-src/ -name "*.so*" -exec cp -a {} apk-src/openlibrary-1.25/ \; || true
+          cp openlibrary.desktop apk-src/openlibrary-1.25/
+          tar czf apk-pkg/openlibrary-1.25.tar.gz -C apk-src openlibrary-1.25
 
           cat > apk-pkg/APKBUILD <<'EOF'
           pkgname=openlibrary
-          pkgver=1.0.0
+          pkgver=1.25
           pkgrel=0
           pkgdesc="Open source epub reader - قارئ كتب إلكترونية مفتوح المصدر"
           url="https://github.com/ahmed-x86/openlibrary"
           arch="x86_64"
           license="GPL"
-          depends="fontconfig qt6-qtbase"
-          makedepends="qt6-qtbase-dev"
+          depends="fontconfig qt6-qtbase qt6-qtdeclarative qt6-qtsvg"
+          makedepends="qt6-qtbase-dev qt6-qtdeclarative-dev qt6-qtsvg-dev"
           options="!strip !check"
           source="openlibrary-$pkgver.tar.gz"
 
@@ -466,23 +464,22 @@ jobs:
         run: |
           mkdir -p arch-pkg
 
-          # إنشاء أرشيف مصدر يحتوي على الملف التنفيذي والمكتبات المشتركة
-          mkdir -p arch-src/openlibrary-1.0.0
-          cp build-src/openlibrary arch-src/openlibrary-1.0.0/
-          find build-src/ \( -name "libnfd.so*" -o -name "libpugixml.so*" -o -name "libslint_cpp.so*" \) -exec cp -a {} arch-src/openlibrary-1.0.0/ \;
-          cp openlibrary.desktop arch-src/openlibrary-1.0.0/
-          chmod +x arch-src/openlibrary-1.0.0/openlibrary
-          tar czf arch-pkg/openlibrary-1.0.0.tar.gz -C arch-src openlibrary-1.0.0
+          mkdir -p arch-src/openlibrary-1.25
+          cp build-src/openlibrary arch-src/openlibrary-1.25/
+          find build-src/ -name "*.so*" -exec cp -a {} arch-src/openlibrary-1.25/ \; || true
+          cp openlibrary.desktop arch-src/openlibrary-1.25/
+          chmod +x arch-src/openlibrary-1.25/openlibrary
+          tar czf arch-pkg/openlibrary-1.25.tar.gz -C arch-src openlibrary-1.25
 
           cat > arch-pkg/PKGBUILD <<'EOF'
           pkgname=openlibrary
-          pkgver=1.0.0
+          pkgver=1.25
           pkgrel=1
           pkgdesc="Open source epub reader - قارئ كتب إلكترونية مفتوح المصدر"
           arch=('x86_64')
           url="https://github.com/ahmed-x86/openlibrary"
           license=('GPL')
-          depends=('fontconfig')
+          depends=('fontconfig' 'qt6-base' 'qt6-declarative' 'qt6-svg')
           source=("openlibrary-${pkgver}.tar.gz")
           sha256sums=('SKIP')
 
@@ -503,7 +500,7 @@ jobs:
           chown -R builder:builder arch-pkg
           cd arch-pkg
           su builder -c "makepkg -s --noconfirm"
-          mv openlibrary-1.0.0-1-x86_64.pkg.tar.zst ../OpenLibrary-Linux.pkg.tar.zst
+          mv openlibrary-1.25-1-x86_64.pkg.tar.zst ../OpenLibrary-Linux.pkg.tar.zst
 
       - name: Upload Arch Package Artifact
         uses: actions/upload-artifact@v4
@@ -540,22 +537,22 @@ jobs:
         run: |
           mkdir -p arch-pkg
 
-          mkdir -p arch-src/openlibrary-1.0.0
-          cp build-src/openlibrary arch-src/openlibrary-1.0.0/
-          find build-src/ \( -name "libnfd.so*" -o -name "libpugixml.so*" -o -name "libslint_cpp.so*" \) -exec cp -a {} arch-src/openlibrary-1.0.0/ \;
-          cp openlibrary.desktop arch-src/openlibrary-1.0.0/
-          chmod +x arch-src/openlibrary-1.0.0/openlibrary
-          tar czf arch-pkg/openlibrary-1.0.0.tar.gz -C arch-src openlibrary-1.0.0
+          mkdir -p arch-src/openlibrary-1.25
+          cp build-src/openlibrary arch-src/openlibrary-1.25/
+          find build-src/ -name "*.so*" -exec cp -a {} arch-src/openlibrary-1.25/ \; || true
+          cp openlibrary.desktop arch-src/openlibrary-1.25/
+          chmod +x arch-src/openlibrary-1.25/openlibrary
+          tar czf arch-pkg/openlibrary-1.25.tar.gz -C arch-src openlibrary-1.25
 
           cat > arch-pkg/PKGBUILD <<'EOF'
           pkgname=openlibrary
-          pkgver=1.0.0
+          pkgver=1.25
           pkgrel=1
           pkgdesc="Open source epub reader (musl build) - قارئ كتب إلكترونية مفتوح المصدر"
           arch=('x86_64')
           url="https://github.com/ahmed-x86/openlibrary"
           license=('GPL')
-          depends=('fontconfig')
+          depends=('fontconfig' 'qt6-base' 'qt6-declarative' 'qt6-svg')
           source=("openlibrary-${pkgver}.tar.gz")
           sha256sums=('SKIP')
 
@@ -566,7 +563,7 @@ jobs:
               for lib in *.so*; do
                   [ -e "$lib" ] && install -Dm755 "$lib" "${pkgdir}/usr/lib/openlibrary/$lib"
               done
-              install -Dm644 openlibrary.desktop "${pkgdir}/usr/share/applications/openlibrary.desktop"
+              install -Dm644 openlibrary.desktop "\${pkgdir}/usr/share/applications/openlibrary.desktop"
           }
           EOF
           sed -i 's/^          //' arch-pkg/PKGBUILD
@@ -576,7 +573,7 @@ jobs:
           chown -R builder:builder arch-pkg
           cd arch-pkg
           su builder -c "makepkg -s --noconfirm"
-          mv openlibrary-1.0.0-1-x86_64.pkg.tar.zst ../OpenLibrary-Linux-musl.pkg.tar.zst
+          mv openlibrary-1.25-1-x86_64.pkg.tar.zst ../OpenLibrary-Linux-musl.pkg.tar.zst
 
       - name: Upload Arch Package Artifact
         uses: actions/upload-artifact@v4
@@ -616,26 +613,26 @@ jobs:
       - name: Prepare Package Root (glibc)
         run: |
           PKG_ROOT="void-pkg-root"
-          mkdir -p "${PKG_ROOT}/usr/bin"
-          mkdir -p "${PKG_ROOT}/usr/lib/openlibrary"
-          mkdir -p "${PKG_ROOT}/usr/share/applications"
-          cp build-src-glibc/openlibrary "${PKG_ROOT}/usr/bin/openlibrary"
-          chmod +x "${PKG_ROOT}/usr/bin/openlibrary"
-          find build-src-glibc/ \( -name "libnfd.so*" -o -name "libpugixml.so*" -o -name "libslint_cpp.so*" \) -exec cp -a {} "${PKG_ROOT}/usr/lib/openlibrary/" \;
-          cp openlibrary.desktop "${PKG_ROOT}/usr/share/applications/"
+          mkdir -p "\${PKG_ROOT}/usr/bin"
+          mkdir -p "\${PKG_ROOT}/usr/lib/openlibrary"
+          mkdir -p "\${PKG_ROOT}/usr/share/applications"
+          cp build-src-glibc/openlibrary "\${PKG_ROOT}/usr/bin/openlibrary"
+          chmod +x "\${PKG_ROOT}/usr/bin/openlibrary"
+          find build-src-glibc/ -name "*.so*" -exec cp -a {} "\${PKG_ROOT}/usr/lib/openlibrary/" \; || true
+          cp openlibrary.desktop "\${PKG_ROOT}/usr/share/applications/"
 
       - name: Build glibc .xbps Package with xbps-create
         run: |
           xbps-create \
             -A x86_64 \
-            -n openlibrary-1.0.0_1 \
+            -n openlibrary-1.25_1 \
             -s "Open source epub reader" \
             --license GPL \
             --homepage "https://github.com/ahmed-x86/openlibrary" \
             --maintainer "ahmed-x86" \
             void-pkg-root
 
-          mv openlibrary-1.0.0_1.x86_64.xbps OpenLibrary-Void-glibc.xbps
+          mv openlibrary-1.25_1.x86_64.xbps OpenLibrary-Void-glibc.xbps
 
       - name: Upload Void glibc Package Artifact
         uses: actions/upload-artifact@v4
@@ -646,26 +643,26 @@ jobs:
       - name: Prepare Package Root (musl)
         run: |
           PKG_ROOT="void-pkg-root-musl"
-          mkdir -p "${PKG_ROOT}/usr/bin"
-          mkdir -p "${PKG_ROOT}/usr/lib/openlibrary"
-          mkdir -p "${PKG_ROOT}/usr/share/applications"
-          cp build-src-musl/openlibrary "${PKG_ROOT}/usr/bin/openlibrary"
-          chmod +x "${PKG_ROOT}/usr/bin/openlibrary"
-          find build-src-musl/ \( -name "libnfd.so*" -o -name "libpugixml.so*" -o -name "libslint_cpp.so*" \) -exec cp -a {} "${PKG_ROOT}/usr/lib/openlibrary/" \;
-          cp openlibrary.desktop "${PKG_ROOT}/usr/share/applications/"
+          mkdir -p "\${PKG_ROOT}/usr/bin"
+          mkdir -p "\${PKG_ROOT}/usr/lib/openlibrary"
+          mkdir -p "\${PKG_ROOT}/usr/share/applications"
+          cp build-src-musl/openlibrary "\${PKG_ROOT}/usr/bin/openlibrary"
+          chmod +x "\${PKG_ROOT}/usr/bin/openlibrary"
+          find build-src-musl/ -name "*.so*" -exec cp -a {} "\${PKG_ROOT}/usr/lib/openlibrary/" \; || true
+          cp openlibrary.desktop "\${PKG_ROOT}/usr/share/applications/"
 
       - name: Build musl .xbps Package with xbps-create
         run: |
           xbps-create \
             -A x86_64-musl \
-            -n openlibrary-1.0.0_1 \
+            -n openlibrary-1.25_1 \
             -s "Open source epub reader" \
             --license GPL \
             --homepage "https://github.com/ahmed-x86/openlibrary" \
             --maintainer "ahmed-x86" \
             void-pkg-root-musl
 
-          mv openlibrary-1.0.0_1.x86_64-musl.xbps OpenLibrary-Void-musl.xbps
+          mv openlibrary-1.25_1.x86_64-musl.xbps OpenLibrary-Void-musl.xbps
 
       - name: Upload Void musl Package Artifact
         uses: actions/upload-artifact@v4
@@ -692,45 +689,68 @@ jobs:
         with:
           gradle-version: '8.4'
 
-      # تم حذف setup-android من هنا لتسريع البناء لأن خوادم Ubuntu تمتلك SDK جاهز
-
       - name: Setup Android NDK
         uses: nttld/setup-ndk@v1
         id: setup-ndk
         with:
           ndk-version: r26d
 
-      - name: Setup Rust for Android
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install Qt6 Host (Linux)
+        id: qt-host
+        uses: jurplel/install-qt-action@v4
         with:
-          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+          version: '6.7.*'
+          host: 'linux'
+          target: 'desktop'
+          arch: 'gcc_64'
+          cache: true
+
+      - name: Install Qt6 Android (All ABIs)
+        id: qt-android
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.7.*'
+          host: 'linux'
+          target: 'android'
+          arch: 'android_arm64_v8a android_armv7 android_x86_64'
+          cache: true
+
+      - name: Configure Gradle CMake for Qt6 Android
+        run: |
+          QT_BASE_DIR=$(dirname "${{ steps.qt-host.outputs.qt-root-dir }}")
+          cat >> android/app/build.gradle <<EOF
+          android.defaultConfig.externalNativeBuild.cmake {
+              arguments "-DQT_HOST_PATH=\${QT_BASE_DIR}/gcc_64"
+          }
+          EOF
 
       - name: Decode Keystore
         env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_BASE64: \${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
+          echo "\$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
 
       - name: Build APK (Universal)
         env:
-          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          ANDROID_NDK_HOME: \${{ steps.setup-ndk.outputs.ndk-path }}
           KEYSTORE_PATH: "release.keystore"
-          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEYSTORE_PASSWORD: \${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: \${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: \${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
+          QT_BASE_DIR=$(dirname "${{ steps.qt-host.outputs.qt-root-dir }}")
+          export CMAKE_PREFIX_PATH="\${QT_BASE_DIR}/android_arm64_v8a;${QT_BASE_DIR}/android_armv7;${QT_BASE_DIR}/android_x86_64"
           cd android
           gradle assembleRelease
 
-      # تم تعديل أمر البحث ليكون ذكياً ولن يفشل أبداً طالما الـ APK موجود
       - name: Find and Copy APK
         run: |
-          APK_PATH=$(find android -type f -name "*.apk" | grep -v "unaligned" | head -n 1)
-          if [ -z "$APK_PATH" ]; then
+          APK_PATH=\$(find android -type f -name "*.apk" | grep -v "unaligned" | head -n 1)
+          if [ -z "\$APK_PATH" ]; then
             echo "::error::لم يتم إيجاد ملف APK!"
             exit 1
           fi
-          cp "$APK_PATH" OpenLibrary-Android.apk
+          cp "\$APK_PATH" OpenLibrary-Android.apk
 
       - name: Upload Android Artifact
         uses: actions/upload-artifact@v4
@@ -740,19 +760,18 @@ jobs:
 
   # ===== أندرويد - بناء مخصص لكل معمارية (Matrix) =====
   build-android:
-    name: Build Android APK (${{ matrix.arch }})
+    name: Build Android APK (\${{ matrix.arch }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
           - arch: arm64-v8a
-            rust_target: aarch64-linux-android
+            qt_arch: android_arm64_v8a
           - arch: armeabi-v7a
-            rust_target: armv7-linux-androideabi
-
+            qt_arch: android_armv7
           - arch: x86_64
-            rust_target: x86_64-linux-android
+            qt_arch: android_x86_64
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -768,44 +787,62 @@ jobs:
         with:
           gradle-version: '8.4'
 
-      # تم حذف setup-android من هنا لتسريع البناء
-
       - name: Setup Android NDK
         uses: nttld/setup-ndk@v1
         id: setup-ndk
         with:
           ndk-version: r26d
 
-      - name: Setup Rust for Android
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install Qt6 Host (Linux)
+        id: qt-host
+        uses: jurplel/install-qt-action@v4
         with:
-          targets: ${{ matrix.rust_target }}
+          version: '6.7.*'
+          host: 'linux'
+          target: 'desktop'
+          arch: 'gcc_64'
+          cache: true
+
+      - name: Install Qt6 Android (\${{ matrix.qt_arch }})
+        id: qt-android
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.7.*'
+          host: 'linux'
+          target: 'android'
+          arch: \${{ matrix.qt_arch }}
+          cache: true
+
+      - name: Configure Gradle CMake for Qt6 Android
+        run: |
+          QT_BASE_DIR=$(dirname "${{ steps.qt-host.outputs.qt-root-dir }}")
+          cat >> android/app/build.gradle <<EOF
+          android.defaultConfig.externalNativeBuild.cmake {
+              arguments "-DQT_HOST_PATH=\${QT_BASE_DIR}/gcc_64", "-DCMAKE_PREFIX_PATH=${QT_BASE_DIR}/${{ matrix.qt_arch }}"
+          }
+          EOF
 
       - name: Decode Keystore
         env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_BASE64: \${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
+          echo "\$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
 
-      - name: Build APK (${{ matrix.arch }})
+      - name: Build APK (\${{ matrix.arch }})
         env:
-          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          ANDROID_NDK_HOME: \${{ steps.setup-ndk.outputs.ndk-path }}
           KEYSTORE_PATH: "release.keystore"
-          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEYSTORE_PASSWORD: \${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: \${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: \${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           cd android
-          # ملاحظة: android.injected.build.abi هي خاصية داخلية يستخدمها Android Studio عادة
-          # عند التشغيل المباشر من الـ IDE، وهي تجعل AGP يضيف android:testOnly="true"
-          # تلقائيًا في الـ manifest، فيفشل التثبيت العادي برسالة INSTALL_FAILED_TEST_ONLY.
-          # نضيف android.injected.testOnly=false صراحة لإجبار AGP على عدم إضافتها.
-          gradle assembleRelease -Pandroid.injected.build.abi=${{ matrix.arch }} -Pandroid.injected.testOnly=false
+          gradle assembleRelease -Pandroid.injected.build.abi=\${{ matrix.arch }} -Pandroid.injected.testOnly=false
 
       - name: Find and Copy APK
         run: |
-          APK_PATH=$(find android -type f -name "*.apk" | grep -v "unaligned" | head -n 1)
-          if [ -z "$APK_PATH" ]; then
+          APK_PATH=\$(find android -type f -name "*.apk" | grep -v "unaligned" | head -n 1)
+          if [ -z "\$APK_PATH" ]; then
             echo "::error::لم يتم إيجاد ملف APK!"
             exit 1
           fi
@@ -814,8 +851,8 @@ jobs:
       - name: Upload Android Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: OpenLibrary-Android-${{ matrix.arch }}
-          path: OpenLibrary-Android-${{ matrix.arch }}.apk
+          name: OpenLibrary-Android-\${{ matrix.arch }}
+          path: OpenLibrary-Android-\${{ matrix.arch }}.apk
 
   # ===== ويندوز =====
   build-windows:
@@ -828,9 +865,6 @@ jobs:
       - name: Install UPX (Windows)
         run: choco install upx
 
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
       - name: Install Qt6 (Windows)
         uses: jurplel/install-qt-action@v4
         with:
@@ -840,18 +874,17 @@ jobs:
 
       - name: Build Project
         run: |
-          cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="${{ env.QT_ROOT_DIR }}"
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="\${{ env.QT_ROOT_DIR }}"
           cmake --build build --config Release
 
-      - name: Compress Windows Binary
-        run: upx --best --lzma build/Release/openlibrary.exe || true
-
-      - name: Package Windows
+      - name: Package Windows with windeployqt
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path OpenLibrary-Windows
           Copy-Item build\Release\openlibrary.exe -Destination OpenLibrary-Windows\
-          Compress-Archive -Path OpenLibrary-Windows -DestinationPath OpenLibrary-Windows.zip
+          & "\${{ env.QT_ROOT_DIR }}\bin\windeployqt.exe" --release --no-translations --qmldir ui OpenLibrary-Windows\openlibrary.exe
+          upx --best --lzma OpenLibrary-Windows\openlibrary.exe
+          Compress-Archive -Path OpenLibrary-Windows\* -DestinationPath OpenLibrary-Windows.zip
 
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
@@ -875,24 +908,24 @@ jobs:
       - name: Generate Download Table
         id: notes
         run: |
-          TAG="${{ github.ref_name }}"
-          REPO="${{ github.repository }}"
+          TAG="\${{ github.ref_name }}"
+          REPO="\${{ github.repository }}"
           BASE_URL="https://github.com/${REPO}/releases/download/${TAG}"
 
           cell() {
-            local file="$1"
-            local path="artifacts/${file}"
-            if [ -f "$path" ]; then
+            local file="\$1"
+            local path="artifacts/\${file}"
+            if [ -f "\$path" ]; then
               local size
               size=$(du -h "$path" | cut -f1 | sed 's/[[:space:]]*//g')
-              echo "[${size}](${BASE_URL}/${file})"
+              echo "[\${size}](${BASE_URL}/${file})"
             else
               echo "-----"
             fi
           }
 
           {
-            echo "## 📦 OpenLibrary ${TAG}"
+            echo "## 📦 OpenLibrary \${TAG}"
             echo ""
             echo "اختر النسخة المناسبة لجهازك من الجدول تحت وحمّلها مباشرة (الحجم نفسه هو رابط التحميل) 👇"
             echo ""
@@ -901,22 +934,22 @@ jobs:
             echo ""
             echo "| المكتبة \\ الصيغة | ELF | .tar.gz | .deb | .rpm | .pkg.tar.zst | .xbps | .apk |"
             echo "|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|"
-            echo "| **glibc** | $(cell openlibrary-elf-glibc) | $(cell OpenLibrary-Linux-Portable.tar.gz) | $(cell OpenLibrary-Linux.deb) | $(cell OpenLibrary-Linux.rpm) | $(cell OpenLibrary-Linux.pkg.tar.zst) | $(cell OpenLibrary-Void-glibc.xbps) | ----- |"
-            echo "| **musl**  | $(cell openlibrary-elf-musllibc) | $(cell OpenLibrary-Linux-musl-Portable.tar.gz) | $(cell OpenLibrary-Linux-musl.deb) | $(cell OpenLibrary-Linux-musl.rpm) | $(cell OpenLibrary-Linux-musl.pkg.tar.zst) | $(cell OpenLibrary-Void-musl.xbps) | $(cell OpenLibrary-Alpine.apk) |"
+            echo "| **glibc** | $(cell openlibrary-elf-glibc) |$(cell OpenLibrary-Linux-Portable.tar.gz) | $(cell OpenLibrary-Linux.deb) |$(cell OpenLibrary-Linux.rpm) | $(cell OpenLibrary-Linux.pkg.tar.zst) |$(cell OpenLibrary-Void-glibc.xbps) | ----- |"
+            echo "| **musl**  | \$(cell openlibrary-elf-musllibc) | $(cell OpenLibrary-Linux-musl-Portable.tar.gz) |$(cell OpenLibrary-Linux-musl.deb) | $(cell OpenLibrary-Linux-musl.rpm) |$(cell OpenLibrary-Linux-musl.pkg.tar.zst) | $(cell OpenLibrary-Void-musl.xbps) |$(cell OpenLibrary-Alpine.apk) |"
             echo ""
 
             echo "### 🤖 أندرويد"
             echo ""
             echo "| التحميل \\ المعمارية | x86_64 | armv7 | armv8 | 🌐 عام (Universal) |"
             echo "|:---|:---:|:---:|:---:|:---:|"
-            echo "| **APK** | $(cell OpenLibrary-Android-x86_64.apk) | $(cell OpenLibrary-Android-armeabi-v7a.apk) | $(cell OpenLibrary-Android-arm64-v8a.apk) | $(cell OpenLibrary-Android.apk) |"
+            echo "| **APK** | $(cell OpenLibrary-Android-x86_64.apk) |$(cell OpenLibrary-Android-armeabi-v7a.apk) | $(cell OpenLibrary-Android-arm64-v8a.apk) |$(cell OpenLibrary-Android.apk) |"
             echo ""
 
             echo "### 🪟 ويندوز"
             echo ""
             echo "| الصيغة \\ المعمارية | x86_64 |"
             echo "|:---|:---:|"
-            echo "| **أرشيف (exe)** | $(cell OpenLibrary-Windows.zip) |"
+            echo "| **أرشيف (exe)** | \$(cell OpenLibrary-Windows.zip) |"
             echo ""
             echo "---"
             echo ""
@@ -962,4 +995,4 @@ jobs:
           prerelease: false
           generate_release_notes: true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
