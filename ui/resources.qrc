@@ -1,0 +1,16 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource prefix="/ui">
+        <file>ShadcnButton.qml</file>
+        <file>IconButton.qml</file>
+        <file>TabButton.qml</file>
+        <file>BookCard.qml</file>
+        <file>MetadataRow.qml</file>
+        <file>BottomNavigation.qml</file>
+        <file>AboutPage.qml</file>
+        <file>main.qml</file>
+        <file>icons/github.svg</file>
+        <file>icons/info.svg</file>
+        <file>icons/telegram.svg</file>
+    </qresource>
+</RCC>
