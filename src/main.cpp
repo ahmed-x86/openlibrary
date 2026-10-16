@@ -1,18 +1,25 @@
-#include "main.h" 
 #include "epub_reader.h"
 
-#ifndef __ANDROID__
 #include <QApplication>
+#include <QQmlApplicationEngine>
+#include <QQmlComponent>
+#include <QQmlContext>
+#include <QQmlPropertyMap>
+#include <QQmlExpression>
+#include <QQuickStyle>
+#include <QQuickWindow>
 #include <QFileDialog>
 #include <QDesktopServices>
+#include <QStandardPaths>
+#include <QMetaObject>
+#include <QFileInfo>
+#include <QFile>
+#include <QDir>
 #include <QUrl>
-#endif
 
 #include <iostream>
 #include <memory>
 #include <string>
-#include <cstdlib> 
-#include <optional> // تمت الإضافة لدعم التغليف والتأخير في تهيئة المتغير
 #include <array>
 #include <cstdio>
 
@@ -22,55 +29,88 @@ static JavaVM* g_jvm = nullptr;
 static jobject g_activity = nullptr;
 #endif
 
-// استخدام std::optional لتأخير تهيئة واجهة Slint وجعلها متوافقة مع C++
-static std::optional<slint::ComponentHandle<MainWindow>> g_ui;
+static QObject* g_rootObject = nullptr;
 static std::shared_ptr<EpubReader> g_reader;
 
-// دالة تحديث الواجهة عامة
+// وراثة QQmlPropertyMap عبر الباني المحمي لمنع تحذير الإهمال (Deprecation Warning) في Qt 6.10+
+class BridgeMap : public QQmlPropertyMap {
+public:
+    explicit BridgeMap(QObject* parent = nullptr)
+        : QQmlPropertyMap(this, parent) {}
+};
+
+// ============================================================
+// تحديث خصائص واجهة QML من بيانات الكتاب الحالي
+// ============================================================
 void updateReaderUI() {
-    if (!g_ui || !g_reader) return;
-    
+    if (!g_rootObject || !g_reader) return;
+
     const auto& meta = g_reader->getMetadata();
-    auto& ui = *g_ui; // أخذ مرجع (Reference) لتسهيل الكود وتجنب التكرار
-    
-    ui->set_book_title(slint::SharedString(meta.title));
-    ui->set_book_author(slint::SharedString(meta.author));
-    ui->set_chapter_content(slint::SharedString(g_reader->getCurrentChapterContent()));
-    
-    ui->set_current_chapter_num(g_reader->getCurrentChapterIndex() + 1);
-    ui->set_chapter_count(g_reader->getChapterCount());
-    
-    ui->set_can_go_next(g_reader->getCurrentChapterIndex() + 1 < g_reader->getChapterCount());
-    ui->set_can_go_prev(g_reader->getCurrentChapterIndex() > 0);
-    
-    ui->set_meta_language(slint::SharedString(meta.language));
-    ui->set_meta_publisher(slint::SharedString(meta.publisher));
-    ui->set_meta_date(slint::SharedString(meta.date));
-    ui->set_meta_description(slint::SharedString(meta.description));
-    ui->set_meta_subject(slint::SharedString(meta.subject));
-    ui->set_meta_rights(slint::SharedString(meta.rights));
-    ui->set_meta_identifier(slint::SharedString(meta.identifier));
-    ui->set_meta_source(slint::SharedString(meta.source));
-    ui->set_meta_format(slint::SharedString(meta.format));
-    ui->set_meta_chapters(slint::SharedString(std::to_string(meta.chapterCount)));
+
+    g_rootObject->setProperty("bookTitle", QString::fromStdString(meta.title));
+    g_rootObject->setProperty("bookAuthor", QString::fromStdString(meta.author));
+    g_rootObject->setProperty("chapterContent", QString::fromStdString(g_reader->getCurrentChapterContent()));
+
+    g_rootObject->setProperty("currentChapterNum", g_reader->getCurrentChapterIndex() + 1);
+    g_rootObject->setProperty("chapterCount", g_reader->getChapterCount());
+
+    g_rootObject->setProperty("canGoNext", g_reader->getCurrentChapterIndex() + 1 < g_reader->getChapterCount());
+    g_rootObject->setProperty("canGoPrev", g_reader->getCurrentChapterIndex() > 0);
+
+    g_rootObject->setProperty("metaLanguage", QString::fromStdString(meta.language));
+    g_rootObject->setProperty("metaPublisher", QString::fromStdString(meta.publisher));
+    g_rootObject->setProperty("metaDate", QString::fromStdString(meta.date));
+    g_rootObject->setProperty("metaDescription", QString::fromStdString(meta.description));
+    g_rootObject->setProperty("metaSubject", QString::fromStdString(meta.subject));
+    g_rootObject->setProperty("metaRights", QString::fromStdString(meta.rights));
+    g_rootObject->setProperty("metaIdentifier", QString::fromStdString(meta.identifier));
+    g_rootObject->setProperty("metaSource", QString::fromStdString(meta.source));
+    g_rootObject->setProperty("metaFormat", QString::fromStdString(meta.format));
+    g_rootObject->setProperty("metaChapters", QString::number(meta.chapterCount));
 }
 
 // ============================================================
-// Linux Desktop: نافذة اختيار ملفات أصلية عبر بوابات xdg-desktop-portal
+// فتح كتاب وتفعيل وضع القراءة
 // ============================================================
-// على أنظمة Linux ذات مديري نوافذ بسيطة (مثل Hyprland على Wayland)،
-// QFileDialog غالبًا يفشل في تفعيل البوابة الأصلية ويعود لنافذة Qt المدمجة.
-// الحل: استخدام zenity أو kdialog مباشرة عبر popen للحصول على النافذة الأصلية دائمًا.
+static bool openBookAndShow(const std::string& filePath) {
+    if (filePath.empty() || !g_reader || !g_rootObject) return false;
+
+    if (g_reader->open(filePath)) {
+        updateReaderUI();
+        g_rootObject->setProperty("readingMode", true);
+        g_rootObject->setProperty("showInfo", false);
+        return true;
+    }
+
+    std::cerr << "[Error] فشل فتح ملف الكتاب: " << filePath << std::endl;
+    return false;
+}
+
+// ============================================================
+// Linux Desktop: نافذة اختيار ملفات أصلية عبر zenity / kdialog
+// مع التراجع التلقائي إلى QFileDialog إذا لم يكونا مثبتين
+// ============================================================
 #if defined(__linux__) && !defined(__ANDROID__)
-static std::string openNativeLinuxFileDialog() {
-    // محاولة zenity أولاً (GTK/Portal)، ثم kdialog (KDE/Portal)
-    const std::array<const char*, 2> commands = {
-        "zenity --file-selection --title='Open EPUB Book' --file-filter='EPUB Books | *.epub' 2>/dev/null",
-        "kdialog --getopenfilename . 'EPUB Books (*.epub)' --title 'Open EPUB Book' 2>/dev/null"
+static std::string openNativeLinuxFileDialog(bool& handledByExternalTool) {
+    handledByExternalTool = false;
+
+    struct DialogCmd {
+        const char* binary;
+        const char* command;
     };
 
-    for (const auto* cmd : commands) {
-        FILE* pipe = popen(cmd, "r");
+    const std::array<DialogCmd, 2> tools = {{
+        {"zenity",  "zenity --file-selection --title='Open EPUB Book' --file-filter='EPUB Books | *.epub' 2>/dev/null"},
+        {"kdialog", "kdialog --getopenfilename . 'EPUB Books (*.epub)' --title 'Open EPUB Book' 2>/dev/null"}
+    }};
+
+    for (const auto& tool : tools) {
+        if (QStandardPaths::findExecutable(QString::fromLatin1(tool.binary)).isEmpty()) {
+            continue;
+        }
+
+        handledByExternalTool = true;
+        FILE* pipe = popen(tool.command, "r");
         if (!pipe) continue;
 
         std::string result;
@@ -80,173 +120,264 @@ static std::string openNativeLinuxFileDialog() {
         }
 
         int status = pclose(pipe);
-
-        // pclose يرجع حالة الخروج — 0 يعني نجاح (المستخدم اختار ملف)
-        // أي قيمة أخرى تعني إلغاء أو فشل
         if (status == 0 && !result.empty()) {
-            // إزالة سطر جديد من نهاية المسار
-            if (result.back() == '\n') {
+            while (!result.empty() && (result.back() == '\n' || result.back() == '\r')) {
                 result.pop_back();
             }
             return result;
         }
-        // إذا الأمر الأول فشل (غير مثبت)، ننتقل للثاني
+        // المستخدم ضغط إلغاء في الأداة المتوفرة، لا نفتح الأداة الثانية
+        return {};
     }
 
-    std::cerr << "[Warning] لم يتم العثور على zenity أو kdialog. تأكد من تثبيت أحدهما." << std::endl;
     return {};
 }
 #endif
 
+// ============================================================
+// دوال JNI الخاصة بنظام أندرويد
+// ============================================================
 #ifdef __ANDROID__
-// ⚠️ تطبيق قاعدة JNI الصارمة: علامة _ في ahmed_x86 تتحول إلى _1 
 extern "C" JNIEXPORT void JNICALL
-Java_com_ahmed_1x86_openlibrary_MainActivity_initJNI(JNIEnv *env, jobject thiz) {
+Java_com_ahmed_1x86_openlibrary_MainActivity_initJNI(JNIEnv* env, jobject thiz) {
     env->GetJavaVM(&g_jvm);
+    if (g_activity) {
+        env->DeleteGlobalRef(g_activity);
+    }
     g_activity = env->NewGlobalRef(thiz);
     std::cout << "[Android JNI] تم تهيئة جسر JNI بنجاح." << std::endl;
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_ahmed_1x86_openlibrary_MainActivity_onEpubFileSelected(JNIEnv *env, jobject /* this */, jstring filePath) {
-    if (!g_ui || !g_reader) return;
+Java_com_ahmed_1x86_openlibrary_MainActivity_onEpubFileSelected(JNIEnv* env, jobject /* thiz */, jstring filePath) {
+    if (!g_rootObject || !g_reader || !filePath) return;
 
-    const char *nativeString = env->GetStringUTFChars(filePath, 0);
-    std::string path(nativeString);
+    const char* nativeString = env->GetStringUTFChars(filePath, nullptr);
+    std::string path(nativeString ? nativeString : "");
     env->ReleaseStringUTFChars(filePath, nativeString);
 
     std::cout << "[Android JNI] تم استلام مسار الملف من أندرويد: " << path << std::endl;
 
-    // تنفيذ فتح الكتاب داخل خيط Slint الرئيسي للحماية من الانهيار
-    slint::invoke_from_event_loop([path]() {
-        if (g_reader->open(path)) {
-            std::cout << "[Success] تم فتح الكتاب بنجاح على أندرويد!" << std::endl;
-            updateReaderUI();
-            (*g_ui)->set_reading_mode(true);
-            (*g_ui)->set_show_info(false);
-        } else {
-            std::cerr << "[Error] فشل فتح الملف على أندرويد: " << path << std::endl;
-        }
-    });
+    // تنفيذ فتح الكتاب داخل خيط Qt الرئيسي بأمان
+    QMetaObject::invokeMethod(g_rootObject, [path]() {
+        openBookAndShow(path);
+    }, Qt::QueuedConnection);
 }
 #endif
 
-#ifdef __ANDROID__
-extern "C" void slint_main()
-#else
-int main(int argc, char* argv[])
-#endif
-{
-#ifndef __ANDROID__
-    // تهيئة Qt قبل أي شيء — ضروري حتى يعمل QFileDialog و QDesktopServices
-    // لن نستدعي QApplication::exec() لأن Slint يدير حلقة الأحداث الخاصة به
-    QApplication qtApp(argc, argv);
-#endif
+// ============================================================
+// تحديد مسار ملف main.qml (من الموارد المدمجة أو من المجلد المحلي)
+// ============================================================
+static QUrl resolveMainQmlUrl() {
+    if (QFile::exists(QStringLiteral(":/ui/main.qml"))) {
+        return QUrl(QStringLiteral("qrc:/ui/main.qml"));
+    }
+    if (QFile::exists(QStringLiteral(":/main.qml"))) {
+        return QUrl(QStringLiteral("qrc:/main.qml"));
+    }
 
-    g_ui = MainWindow::create();
+    const QStringList searchPaths = {
+        QDir::currentPath() + QStringLiteral("/ui/main.qml"),
+        QCoreApplication::applicationDirPath() + QStringLiteral("/ui/main.qml"),
+        QCoreApplication::applicationDirPath() + QStringLiteral("/../ui/main.qml")
+    };
+
+    for (const QString& path : searchPaths) {
+        if (QFileInfo::exists(path)) {
+            return QUrl::fromLocalFile(QFileInfo(path).absoluteFilePath());
+        }
+    }
+
+    return QUrl(QStringLiteral("qrc:/ui/main.qml"));
+}
+
+// ============================================================
+// الدالة الرئيسية الموحدة (Linux / Windows / macOS / Android)
+// ============================================================
+int main(int argc, char* argv[]) {
+    // توحيد طابع عناصر التحكم عبر كل الأنظمة لضمان تطابق ألوان الوضع الليلي/النهاري
+    QQuickStyle::setStyle(QStringLiteral("Basic"));
+
+    QApplication app(argc, argv);
+    app.setApplicationName(QStringLiteral("OpenLibrary"));
+    app.setOrganizationName(QStringLiteral("ahmed-x86"));
+
     g_reader = std::make_shared<EpubReader>();
-    auto& ui = *g_ui; // مرجع محلي للتعامل مع الواجهة داخل main
 
-    ui->on_open_epub_dialog([]() {
+    QQmlApplicationEngine engine;
+
+    // 1. إنشاء كائن Theme وتعميمه على كافة ملفات QML لضمان عمل الألوان والوضع الليلي/النهاري
+    QQmlComponent themeComp(&engine);
+    themeComp.setData(R"QML(
+        import QtQuick
+        QtObject {
+            property bool isDark: true
+            readonly property color bg: isDark ? "#09090b" : "#ffffff"
+            readonly property color surface: isDark ? "#121215" : "#f4f4f5"
+            readonly property color border: isDark ? "#27272a" : "#e4e4e7"
+            readonly property color text: isDark ? "#f4f4f5" : "#09090b"
+            readonly property color textMuted: isDark ? "#a1a1aa" : "#71717a"
+            readonly property color buttonBg: isDark ? "#18181b" : "#ffffff"
+            readonly property color primaryBg: isDark ? "#ffffff" : "#09090b"
+            readonly property color primaryText: isDark ? "#000000" : "#ffffff"
+            readonly property color linkColor: isDark ? "#60a5fa" : "#3b82f6"
+            readonly property color overlayBg: isDark ? "#80000000" : "#30000000"
+        }
+    )QML", QUrl());
+    QObject* themeObj = themeComp.create();
+    if (themeObj) {
+        themeObj->setParent(&app);
+        engine.rootContext()->setContextProperty(QStringLiteral("Theme"), themeObj);
+    }
+
+    // 2. جسر تواصل خفيف بين إشارات QML ودوال C++
+    BridgeMap bridge(&app);
+    bridge.insert(QStringLiteral("cmd"), QVariant(QString()));
+    engine.rootContext()->setContextProperty(QStringLiteral("cppBridge"), &bridge);
+
+    const QUrl mainQmlUrl = resolveMainQmlUrl();
+    if (mainQmlUrl.isLocalFile()) {
+        engine.addImportPath(QFileInfo(mainQmlUrl.toLocalFile()).absolutePath());
+    } else {
+        engine.addImportPath(QStringLiteral("qrc:/ui"));
+        engine.addImportPath(QStringLiteral("qrc:/"));
+    }
+
+    QObject::connect(
+        &engine,
+        &QQmlApplicationEngine::objectCreated,
+        &app,
+        [mainQmlUrl](QObject* obj, const QUrl& objUrl) {
+            if (!obj && mainQmlUrl == objUrl) {
+                std::cerr << "[Fatal] فشل تحميل واجهة QML: " << mainQmlUrl.toString().toStdString() << std::endl;
+                QCoreApplication::exit(-1);
+            }
+        },
+        Qt::QueuedConnection
+    );
+
+    engine.load(mainQmlUrl);
+
+    if (engine.rootObjects().isEmpty()) {
+        return -1;
+    }
+
+    g_rootObject = engine.rootObjects().first();
+
+    // ربط إشارات QML في ui/main.qml بجسر C++ مباشرة
+    QQmlExpression signalBinder(
+        engine.rootContext(),
+        g_rootObject,
+        QStringLiteral(
+            "var _seq = 0;"
+            "openEpubDialog.connect(function() { cppBridge.cmd = 'open_epub:' + (++_seq); });"
+            "goNextChapter.connect(function()  { cppBridge.cmd = 'next_chapter:' + (++_seq); });"
+            "goPrevChapter.connect(function()  { cppBridge.cmd = 'prev_chapter:' + (++_seq); });"
+            "goBackHome.connect(function()     { cppBridge.cmd = 'back_home:' + (++_seq); });"
+            "goToChapter.connect(function(ch)  { cppBridge.cmd = 'goto_chapter:' + (++_seq) + ':' + ch; });"
+            "openLink.connect(function(url)    { cppBridge.cmd = 'open_link:' + (++_seq) + ':' + url; });"
+        )
+    );
+    signalBinder.evaluate();
+    if (signalBinder.hasError()) {
+        std::cerr << "[QML Bind Error] " << signalBinder.error().toString().toStdString() << std::endl;
+    }
+
+    // الاستجابة للأوامر القادمة من الواجهة
+    QObject::connect(&bridge, &QQmlPropertyMap::valueChanged, &app, [](const QString& key, const QVariant& value) {
+        if (key != QStringLiteral("cmd")) return;
+
+        const QString raw = value.toString();
+        const int firstColon = raw.indexOf(u':');
+        if (firstColon < 0) return;
+
+        const QString action = raw.left(firstColon);
+        const int secondColon = raw.indexOf(u':', firstColon + 1);
+        const QString payload = (secondColon >= 0) ? raw.mid(secondColon + 1) : QString();
+
+        if (action == QStringLiteral("open_epub")) {
 #if defined(__linux__) && !defined(__ANDROID__)
-        // Linux Desktop: استخدام zenity/kdialog لضمان نافذة أصلية عبر xdg-desktop-portal
-        // هذا يتجنب مشكلة QFileDialog على مديري نوافذ بسيطة مثل Hyprland
-        std::string filePath = openNativeLinuxFileDialog();
-
-        if (!filePath.empty()) {
-            if (g_reader->open(filePath)) {
-                updateReaderUI();
-                (*g_ui)->set_reading_mode(true);
-                (*g_ui)->set_show_info(false);
+            bool handledByExternal = false;
+            std::string filePath = openNativeLinuxFileDialog(handledByExternal);
+            if (handledByExternal) {
+                if (!filePath.empty()) {
+                    openBookAndShow(filePath);
+                }
+                return;
             }
-        }
 #elif defined(__ANDROID__)
-        // أمر C++ لأندرويد: افتح نافذة الملفات عبر جسر JNI
-        if (g_jvm && g_activity) {
-            JNIEnv* env;
-            g_jvm->AttachCurrentThread(&env, NULL);
-            jclass clazz = env->GetObjectClass(g_activity);
-            jmethodID methodId = env->GetMethodID(clazz, "openFilePicker", "()V");
-            if (methodId) {
-                env->CallVoidMethod(g_activity, methodId);
+            if (g_jvm && g_activity) {
+                JNIEnv* env = nullptr;
+                g_jvm->AttachCurrentThread(&env, nullptr);
+                if (env) {
+                    jclass clazz = env->GetObjectClass(g_activity);
+                    jmethodID methodId = env->GetMethodID(clazz, "openFilePicker", "()V");
+                    if (methodId) {
+                        env->CallVoidMethod(g_activity, methodId);
+                    }
+                }
+                return;
             }
-            g_jvm->DetachCurrentThread();
-        } else {
-            std::cerr << "[Error] لم يتم تهيئة JNI Activity!" << std::endl;
-        }
-#else
-        // Windows / macOS: استخدام QFileDialog مع النافذة الأصلية للنظام
-        // لا نمرر QFileDialog::DontUseNativeDialog — يستخدم النافذة الأصلية تلقائيًا
-        QString filePath = QFileDialog::getOpenFileName(
-            nullptr,
-            QStringLiteral("Open EPUB Book"),
-            QString(),
-            QStringLiteral("EPUB Books (*.epub)")
-        );
+#endif
+            // Windows / macOS / أو Linux بدون zenity / أو Android قياسي
+            const QString selectedFile = QFileDialog::getOpenFileName(
+                nullptr,
+                QStringLiteral("اختر كتاب EPUB"),
+                QString(),
+                QStringLiteral("EPUB Books (*.epub)")
+            );
 
-        if (!filePath.isEmpty()) {
-            std::string path = filePath.toStdString();
-            if (g_reader->open(path)) {
+            if (!selectedFile.isEmpty()) {
+                QString localPath = QUrl(selectedFile).isLocalFile()
+                                        ? QUrl(selectedFile).toLocalFile()
+                                        : selectedFile;
+                openBookAndShow(localPath.toUtf8().constData());
+            }
+        }
+        else if (action == QStringLiteral("next_chapter")) {
+            if (g_reader->nextChapter()) {
                 updateReaderUI();
-                (*g_ui)->set_reading_mode(true);
-                (*g_ui)->set_show_info(false);
             }
         }
-#endif
-    });
-
-    ui->on_go_next_chapter([]() {
-        if (g_reader->nextChapter()) updateReaderUI();
-    });
-
-    ui->on_go_prev_chapter([]() {
-        if (g_reader->prevChapter()) updateReaderUI();
-    });
-
-    ui->on_go_to_chapter([](int target_chapter) {
-        int max_chapters = g_reader->getChapterCount();
-        if (target_chapter < 1) target_chapter = 1;
-        if (target_chapter > max_chapters) target_chapter = max_chapters;
-        
-        if (g_reader->goToChapter(target_chapter - 1)) {
-            updateReaderUI();
-        } else {
-            updateReaderUI();
+        else if (action == QStringLiteral("prev_chapter")) {
+            if (g_reader->prevChapter()) {
+                updateReaderUI();
+            }
+        }
+        else if (action == QStringLiteral("goto_chapter")) {
+            int targetChapter = payload.toInt();
+            const int maxChapters = g_reader->getChapterCount();
+            if (maxChapters > 0) {
+                if (targetChapter < 1) targetChapter = 1;
+                if (targetChapter > maxChapters) targetChapter = maxChapters;
+                g_reader->goToChapter(targetChapter - 1);
+                updateReaderUI();
+            }
+        }
+        else if (action == QStringLiteral("back_home")) {
+            if (g_rootObject) {
+                g_rootObject->setProperty("readingMode", false);
+                g_rootObject->setProperty("showInfo", false);
+            }
+            g_reader->close();
+        }
+        else if (action == QStringLiteral("open_link")) {
+            if (!payload.isEmpty()) {
+                QDesktopServices::openUrl(QUrl(payload));
+            }
         }
     });
 
-    ui->on_go_back_home([]() {
-        (*g_ui)->set_reading_mode(false);
-        (*g_ui)->set_show_info(false);
-        g_reader->close();
-    });
-
-    ui->on_open_link([](slint::SharedString url) {
-        std::string url_str(url);
+    // دعم فتح كتاب مباشرة عبر تمرير مساره في سطر الأوامر (CLI)
 #ifndef __ANDROID__
-        // Qt يتكفل بفتح الرابط على Linux/Windows/macOS بشكل موحد
-        QDesktopServices::openUrl(QUrl(QString::fromStdString(url_str)));
-#else
-        // على أندرويد نستخدم أمر النظام مباشرة لأن QApplication غير مُهيأ
-        std::string cmd = "am start -a android.intent.action.VIEW -d " + url_str;
-        std::system(cmd.c_str());
-#endif
-    });
-
-#ifndef __ANDROID__
-    if (argc > 1) {
-        std::string filePath = argv[1];
-        if (g_reader->open(filePath)) {
-            updateReaderUI();
-            ui->set_reading_mode(true);
-            ui->set_show_info(false);
+    const QStringList args = app.arguments();
+    if (args.size() > 1) {
+        const QString cliPath = args.at(1);
+        if (QFileInfo::exists(cliPath)) {
+            openBookAndShow(cliPath.toUtf8().constData());
         }
     }
 #endif
 
-    ui->run();
-
-#ifndef __ANDROID__
-    return 0;
-#endif
+    return app.exec();
 }
