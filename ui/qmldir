@@ -1,0 +1,8 @@
+singleton Theme 1.0 Theme.qml
+ShadcnButton 1.0 ShadcnButton.qml
+IconButton 1.0 IconButton.qml
+TabButton 1.0 TabButton.qml
+BookCard 1.0 BookCard.qml
+MetadataRow 1.0 MetadataRow.qml
+BottomNavigation 1.0 BottomNavigation.qml
+AboutPage 1.0 AboutPage.qml
