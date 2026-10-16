@@ -735,9 +735,17 @@ jobs:
       - name: Configure Gradle CMake for Qt6 Android
         run: |
           QT_BASE_DIR=$(dirname "${{ steps.qt-host.outputs.qt-root-dir }}")
+          # build.gradle لا ينتهي بسطر جديد، لذلك نضيف سطراً فارغاً أولاً
+          echo >> android/app/build.gradle
           cat >> android/app/build.gradle <<EOF
-          android.defaultConfig.externalNativeBuild.cmake {
-              arguments "-DQT_HOST_PATH=${QT_BASE_DIR}/gcc_64"
+          android {
+              defaultConfig {
+                  externalNativeBuild {
+                      cmake {
+                          arguments "-DQT_HOST_PATH=${QT_BASE_DIR}/gcc_64"
+                      }
+                  }
+              }
           }
           EOF
 
@@ -833,9 +841,17 @@ jobs:
       - name: Configure Gradle CMake for Qt6 Android
         run: |
           QT_BASE_DIR=$(dirname "${{ steps.qt-host.outputs.qt-root-dir }}")
+          # build.gradle لا ينتهي بسطر جديد، لذلك نضيف سطراً فارغاً أولاً
+          echo >> android/app/build.gradle
           cat >> android/app/build.gradle <<EOF
-          android.defaultConfig.externalNativeBuild.cmake {
-              arguments "-DQT_HOST_PATH=${QT_BASE_DIR}/gcc_64", "-DCMAKE_PREFIX_PATH=${QT_BASE_DIR}/${{ matrix.qt_arch }}"
+          android {
+              defaultConfig {
+                  externalNativeBuild {
+                      cmake {
+                          arguments "-DQT_HOST_PATH=${QT_BASE_DIR}/gcc_64", "-DCMAKE_PREFIX_PATH=${QT_BASE_DIR}/${{ matrix.qt_arch }}"
+                      }
+                  }
+              }
           }
           EOF
 
