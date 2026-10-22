@@ -674,6 +674,7 @@ jobs:
   build-android:
     name: Build Android APK (${{ matrix.name }})
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -685,6 +686,19 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+
+      - name: Verify Android project layout (fail fast)
+        run: |
+          fail() { echo "::error::$1"; exit 1; }
+          for f in android/build.gradle android/settings.gradle android/app; do
+            [ ! -e "$f" ] || fail "ملف Gradle قديم ما زال موجوداً: $f. احذفه، فـ Qt يولّد مشروع Gradle بنفسه."
+          done
+          J=android/src/com/ahmed_x86/openlibrary/MainActivity.java
+          [ -f android/AndroidManifest.xml ] || fail "android/AndroidManifest.xml غير موجود"
+          [ -f "$J" ]                        || fail "$J غير موجود"
+          grep -q 'INSERT_APP_LIB_NAME' android/AndroidManifest.xml || fail "الـ manifest ليس بنسخة Qt (ينقصه INSERT_APP_LIB_NAME)"
+          grep -q 'extends QtActivity' "$J" || fail "MainActivity يجب أن يرث QtActivity"
+          echo "Android layout OK"
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -701,8 +715,12 @@ jobs:
       - name: Install Android SDK components required by Qt 6.7
         run: |
           SDKM="${ANDROID_SDK_ROOT:-$ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
-          yes | "$SDKM" --licenses > /dev/null || true
+          yes | "$SDKM" --licenses > /dev/null
           "$SDKM" "platforms;android-34" "build-tools;34.0.0"
+          SDK="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          test -d "$SDK/platforms/android-34"
+          test -d "$SDK/build-tools/34.0.0"
+          echo "Installed platforms:"; ls "$SDK/platforms"
 
       - name: Install Qt6 Host (Linux)
         uses: jurplel/install-qt-action@v4
@@ -721,6 +739,7 @@ jobs:
           target: 'android'
           arch: ${{ matrix.qt_arch }}
           cache: true
+          install-deps: false   # الاعتماديات ثُبّتت مع نسخة المضيف؛ يمنع تكرار apt-get
 
       # للنسخة العامة فقط: نثبّت بقية المعماريات
       - name: Install Qt6 Android (android_armv7) [universal]
@@ -732,6 +751,7 @@ jobs:
           target: 'android'
           arch: 'android_armv7'
           cache: true
+          install-deps: false   # الاعتماديات ثُبّتت مع نسخة المضيف؛ يمنع تكرار apt-get
 
       - name: Install Qt6 Android (android_x86_64) [universal]
         if: matrix.all_abis == 'ON'
@@ -742,6 +762,7 @@ jobs:
           target: 'android'
           arch: 'android_x86_64'
           cache: true
+          install-deps: false   # الاعتماديات ثُبّتت مع نسخة المضيف؛ يمنع تكرار apt-get
 
       - name: Configure & Build APK (CMake + androiddeployqt)
         env:
@@ -786,29 +807,30 @@ jobs:
           BT="$(ls -d "$SDK"/build-tools/* | sort -V | tail -n 1)"
           KS="$RUNNER_TEMP/release.keystore"
 
-          if [ -n "${ANDROID_KEYSTORE_BASE64:-}" ]; then
-            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$KS"
-          else
-            echo "::warning::لا يوجد keystore في Secrets، سيتم التوقيع بمفتاح مؤقت"
-            KEY_ALIAS=tempkey; KEYSTORE_PASSWORD=android; KEY_PASSWORD=android
-            keytool -genkeypair -keystore "$KS" -alias "$KEY_ALIAS" \
-              -storepass "$KEYSTORE_PASSWORD" -keypass "$KEY_PASSWORD" \
-              -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=OpenLibrary"
-          fi
+          for v in ANDROID_KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [ -z "${!v:-}" ]; then
+              echo "::error::السر المطلوب للتوقيع غير موجود: $v (Settings > Secrets). لن يُنتَج APK بمفتاح مؤقت."
+              exit 1
+            fi
+          done
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$KS"
           export KEYSTORE_PASSWORD KEY_PASSWORD
 
-          APK_IN="$(find build -type f -name '*.apk' | grep -v -i 'androidTest' | sort | head -n 1)"
-          if [ -z "$APK_IN" ]; then
-            echo "::error::لم يتم إيجاد ملف APK!"
+          mapfile -t APKS < <(find build/android-build -type f -path '*outputs/apk/release/*.apk')
+          if [ "${#APKS[@]}" -ne 1 ]; then
+            echo "::error::المتوقع APK واحد في outputs/apk/release لكن وُجد ${#APKS[@]}. كل ملفات APK:"
+            find build -type f -name '*.apk'
             exit 1
           fi
+          APK_IN="${APKS[0]}"
           echo "Found: $APK_IN"
 
           "$BT/zipalign" -f -p 4 "$APK_IN" aligned.apk
           "$BT/apksigner" sign --ks "$KS" --ks-key-alias "$KEY_ALIAS" \
             --ks-pass env:KEYSTORE_PASSWORD --key-pass env:KEY_PASSWORD \
             --out "${{ matrix.out }}" aligned.apk
-          "$BT/apksigner" verify --verbose "${{ matrix.out }}" | head -n 5
+          "$BT/apksigner" verify --verbose "${{ matrix.out }}" > verify.txt
+          head -n 5 verify.txt
 
       - name: Upload Android Artifact
         uses: actions/upload-artifact@v4
