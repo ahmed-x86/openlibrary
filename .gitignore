@@ -41,3 +41,4 @@ push_release.py
 .qt/
 
 build logs
+commit_and_release.py

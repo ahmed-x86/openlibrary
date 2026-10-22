@@ -670,133 +670,18 @@ jobs:
           name: OpenLibrary-Void-musl-xbps
           path: OpenLibrary-Void-musl.xbps
 
-  # ===== أندرويد - النسخة العامة (Universal) =====
-  build-android-universal:
-    name: Build Android APK (Universal)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: '8.4'
-
-      - name: Setup Android NDK
-        uses: nttld/setup-ndk@v1
-        id: setup-ndk
-        with:
-          ndk-version: r26d
-
-      - name: Install Qt6 Host (Linux)
-        id: qt-host
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: '6.7.*'
-          host: 'linux'
-          target: 'desktop'
-          arch: 'linux_gcc_64'
-          cache: true
-
-      - name: Install Qt6 Android (android_arm64_v8a)
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: '6.7.*'
-          host: 'linux'
-          target: 'android'
-          arch: 'android_arm64_v8a'
-          cache: true
-
-      - name: Install Qt6 Android (android_armv7)
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: '6.7.*'
-          host: 'linux'
-          target: 'android'
-          arch: 'android_armv7'
-          cache: true
-
-      - name: Install Qt6 Android (android_x86_64)
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: '6.7.*'
-          host: 'linux'
-          target: 'android'
-          arch: 'android_x86_64'
-          cache: true
-
-      - name: Configure Gradle CMake for Qt6 Android
-        run: |
-          QT_BASE_DIR=$(dirname "${{ steps.qt-host.outputs.qt-root-dir }}")
-          # build.gradle لا ينتهي بسطر جديد، لذلك نضيف سطراً فارغاً أولاً
-          echo >> android/app/build.gradle
-          cat >> android/app/build.gradle <<EOF
-          android {
-              defaultConfig {
-                  externalNativeBuild {
-                      cmake {
-                          arguments "-DQT_HOST_PATH=${QT_BASE_DIR}/gcc_64"
-                      }
-                  }
-              }
-          }
-          EOF
-
-      - name: Decode Keystore
-        env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-        run: |
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
-
-      - name: Build APK (Universal)
-        env:
-          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
-          KEYSTORE_PATH: "release.keystore"
-          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: |
-          QT_BASE_DIR=$(dirname "${{ steps.qt-host.outputs.qt-root-dir }}")
-          export CMAKE_PREFIX_PATH="${QT_BASE_DIR}/android_arm64_v8a;${QT_BASE_DIR}/android_armv7;${QT_BASE_DIR}/android_x86_64"
-          cd android
-          gradle assembleRelease
-
-      - name: Find and Copy APK
-        run: |
-          APK_PATH=$(find android -type f -name "*.apk" | grep -v "unaligned" | head -n 1)
-          if [ -z "$APK_PATH" ]; then
-            echo "::error::لم يتم إيجاد ملف APK!"
-            exit 1
-          fi
-          cp "$APK_PATH" OpenLibrary-Android.apk
-
-      - name: Upload Android Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: OpenLibrary-Android-universal
-          path: OpenLibrary-Android.apk
-
-  # ===== أندرويد - بناء مخصص لكل معمارية (Matrix) =====
+  # ===== أندرويد (Qt6 + CMake + androiddeployqt) - 3 معماريات + Universal =====
   build-android:
-    name: Build Android APK (${{ matrix.arch }})
+    name: Build Android APK (${{ matrix.name }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          - arch: arm64-v8a
-            qt_arch: android_arm64_v8a
-          - arch: armeabi-v7a
-            qt_arch: android_armv7
-          - arch: x86_64
-            qt_arch: android_x86_64
+          - { name: arm64-v8a,   abi: arm64-v8a,   qt_arch: android_arm64_v8a, all_abis: 'OFF', out: OpenLibrary-Android-arm64-v8a.apk }
+          - { name: armeabi-v7a, abi: armeabi-v7a, qt_arch: android_armv7,     all_abis: 'OFF', out: OpenLibrary-Android-armeabi-v7a.apk }
+          - { name: x86_64,      abi: x86_64,      qt_arch: android_x86_64,    all_abis: 'OFF', out: OpenLibrary-Android-x86_64.apk }
+          - { name: universal,   abi: arm64-v8a,   qt_arch: android_arm64_v8a, all_abis: 'ON',  out: OpenLibrary-Android.apk }
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -807,85 +692,129 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: '8.4'
-
       - name: Setup Android NDK
         uses: nttld/setup-ndk@v1
         id: setup-ndk
         with:
           ndk-version: r26d
 
+      - name: Install Android SDK components required by Qt 6.7
+        run: |
+          SDKM="${ANDROID_SDK_ROOT:-$ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKM" --licenses > /dev/null || true
+          "$SDKM" "platforms;android-34" "build-tools;34.0.0"
+
       - name: Install Qt6 Host (Linux)
-        id: qt-host
         uses: jurplel/install-qt-action@v4
         with:
-          version: '6.7.*'
+          version: '6.7.3'
           host: 'linux'
           target: 'desktop'
           arch: 'linux_gcc_64'
           cache: true
 
       - name: Install Qt6 Android (${{ matrix.qt_arch }})
-        id: qt-android
         uses: jurplel/install-qt-action@v4
         with:
-          version: '6.7.*'
+          version: '6.7.3'
           host: 'linux'
           target: 'android'
           arch: ${{ matrix.qt_arch }}
           cache: true
 
-      - name: Configure Gradle CMake for Qt6 Android
-        run: |
-          QT_BASE_DIR=$(dirname "${{ steps.qt-host.outputs.qt-root-dir }}")
-          # build.gradle لا ينتهي بسطر جديد، لذلك نضيف سطراً فارغاً أولاً
-          echo >> android/app/build.gradle
-          cat >> android/app/build.gradle <<EOF
-          android {
-              defaultConfig {
-                  externalNativeBuild {
-                      cmake {
-                          arguments "-DQT_HOST_PATH=${QT_BASE_DIR}/gcc_64", "-DCMAKE_PREFIX_PATH=${QT_BASE_DIR}/${{ matrix.qt_arch }}"
-                      }
-                  }
-              }
-          }
-          EOF
+      # للنسخة العامة فقط: نثبّت بقية المعماريات
+      - name: Install Qt6 Android (android_armv7) [universal]
+        if: matrix.all_abis == 'ON'
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.7.3'
+          host: 'linux'
+          target: 'android'
+          arch: 'android_armv7'
+          cache: true
 
-      - name: Decode Keystore
+      - name: Install Qt6 Android (android_x86_64) [universal]
+        if: matrix.all_abis == 'ON'
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.7.3'
+          host: 'linux'
+          target: 'android'
+          arch: 'android_x86_64'
+          cache: true
+
+      - name: Configure & Build APK (CMake + androiddeployqt)
+        env:
+          ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          set -eux
+          # install-qt-action يصدّر QT_HOST_PATH تلقائياً (.../Qt/6.7.3/gcc_64)
+          QT_BASE="$(dirname "$QT_HOST_PATH")"
+          QT_KIT="$QT_BASE/${{ matrix.qt_arch }}"
+          test -f "$QT_KIT/lib/cmake/Qt6/qt.toolchain.cmake"
+
+          EXTRA=()
+          if [ "${{ matrix.all_abis }}" = "ON" ]; then
+            EXTRA+=(
+              -DQT_ANDROID_BUILD_ALL_ABIS=ON
+              -DQT_PATH_ANDROID_ABI_arm64-v8a="$QT_BASE/android_arm64_v8a"
+              -DQT_PATH_ANDROID_ABI_armeabi-v7a="$QT_BASE/android_armv7"
+              -DQT_PATH_ANDROID_ABI_x86_64="$QT_BASE/android_x86_64"
+            )
+          fi
+
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE="$QT_KIT/lib/cmake/Qt6/qt.toolchain.cmake" \
+            -DQT_HOST_PATH="$QT_HOST_PATH" \
+            -DANDROID_ABI=${{ matrix.abi }} \
+            -DANDROID_NDK_ROOT="$ANDROID_NDK_ROOT" \
+            -DANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}" \
+            "${EXTRA[@]}"
+
+          cmake --build build --target apk
+
+      - name: Align & Sign APK
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-        run: |
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
-
-      - name: Build APK (${{ matrix.arch }})
-        env:
-          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
-          KEYSTORE_PATH: "release.keystore"
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          cd android
-          gradle assembleRelease -Pandroid.injected.build.abi=${{ matrix.arch }} -Pandroid.injected.testOnly=false
+          set -eux
+          SDK="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          BT="$(ls -d "$SDK"/build-tools/* | sort -V | tail -n 1)"
+          KS="$RUNNER_TEMP/release.keystore"
 
-      - name: Find and Copy APK
-        run: |
-          APK_PATH=$(find android -type f -name "*.apk" | grep -v "unaligned" | head -n 1)
-          if [ -z "$APK_PATH" ]; then
+          if [ -n "${ANDROID_KEYSTORE_BASE64:-}" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$KS"
+          else
+            echo "::warning::لا يوجد keystore في Secrets، سيتم التوقيع بمفتاح مؤقت"
+            KEY_ALIAS=tempkey; KEYSTORE_PASSWORD=android; KEY_PASSWORD=android
+            keytool -genkeypair -keystore "$KS" -alias "$KEY_ALIAS" \
+              -storepass "$KEYSTORE_PASSWORD" -keypass "$KEY_PASSWORD" \
+              -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=OpenLibrary"
+          fi
+          export KEYSTORE_PASSWORD KEY_PASSWORD
+
+          APK_IN="$(find build -type f -name '*.apk' | grep -v -i 'androidTest' | sort | head -n 1)"
+          if [ -z "$APK_IN" ]; then
             echo "::error::لم يتم إيجاد ملف APK!"
             exit 1
           fi
-          cp "$APK_PATH" OpenLibrary-Android-${{ matrix.arch }}.apk
+          echo "Found: $APK_IN"
+
+          "$BT/zipalign" -f -p 4 "$APK_IN" aligned.apk
+          "$BT/apksigner" sign --ks "$KS" --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass env:KEYSTORE_PASSWORD --key-pass env:KEY_PASSWORD \
+            --out "${{ matrix.out }}" aligned.apk
+          "$BT/apksigner" verify --verbose "${{ matrix.out }}" | head -n 5
 
       - name: Upload Android Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: OpenLibrary-Android-${{ matrix.arch }}
-          path: OpenLibrary-Android-${{ matrix.arch }}.apk
+          name: OpenLibrary-Android-${{ matrix.name }}
+          path: ${{ matrix.out }}
 
   # ===== ويندوز =====
   build-windows:
@@ -928,7 +857,7 @@ jobs:
   # ===== الإصدار النهائي =====
   release:
     name: Create GitHub Release
-    needs: [build-linux-packages, build-linux-packages-musl, build-windows, build-arch, build-arch-musl, build-void, build-alpine-apk, build-android-universal, build-android]
+    needs: [build-linux-packages, build-linux-packages-musl, build-windows, build-arch, build-arch-musl, build-void, build-alpine-apk, build-android]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     steps:

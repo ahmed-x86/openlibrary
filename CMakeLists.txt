@@ -20,18 +20,23 @@ if (PKG_CONFIG_FOUND AND NOT ANDROID)
 endif()
 
 if (NOT LIBZIP_FOUND)
-    FetchContent_Declare(
-        zlib
-        GIT_REPOSITORY https://github.com/madler/zlib.git
-        GIT_TAG        v1.3.1
-    )
-    FetchContent_MakeAvailable(zlib)
-    if (TARGET zlibstatic AND NOT TARGET ZLIB::ZLIB)
-        add_library(ZLIB::ZLIB ALIAS zlibstatic)
+    if (ANDROID)
+        # zlib موجودة أصلاً داخل NDK (مكتبة نظام مستقرة) فلا داعي لبنائها
+        find_package(ZLIB REQUIRED)
+    else()
+        FetchContent_Declare(
+            zlib
+            GIT_REPOSITORY https://github.com/madler/zlib.git
+            GIT_TAG        v1.3.1
+        )
+        FetchContent_MakeAvailable(zlib)
+        if (TARGET zlibstatic AND NOT TARGET ZLIB::ZLIB)
+            add_library(ZLIB::ZLIB ALIAS zlibstatic)
+        endif()
+        set(ZLIB_LIBRARY ZLIB::ZLIB CACHE INTERNAL "")
+        set(ZLIB_INCLUDE_DIR "${zlib_SOURCE_DIR}" "${zlib_BINARY_DIR}" CACHE INTERNAL "")
+        set(ZLIB_FOUND TRUE CACHE INTERNAL "")
     endif()
-    set(ZLIB_LIBRARY ZLIB::ZLIB CACHE INTERNAL "")
-    set(ZLIB_INCLUDE_DIR "${zlib_SOURCE_DIR}" "${zlib_BINARY_DIR}" CACHE INTERNAL "")
-    set(ZLIB_FOUND TRUE CACHE INTERNAL "")
 
     FetchContent_Declare(
         libzip
@@ -45,6 +50,10 @@ if (NOT LIBZIP_FOUND)
     set(ENABLE_LZMA OFF CACHE BOOL "" FORCE)
     set(ENABLE_ZSTD OFF CACHE BOOL "" FORCE)
     set(ENABLE_OPENSSL OFF CACHE BOOL "" FORCE)
+    set(ENABLE_GNUTLS OFF CACHE BOOL "" FORCE)
+    set(ENABLE_MBEDTLS OFF CACHE BOOL "" FORCE)
+    set(BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+    set(BUILD_DOC OFF CACHE BOOL "" FORCE)
     set(LIBZIP_DO_INSTALL OFF CACHE BOOL "" FORCE)
     FetchContent_MakeAvailable(libzip)
 endif()
@@ -66,17 +75,9 @@ if (NOT pugixml_FOUND AND NOT PUGIXML_FOUND)
     FetchContent_MakeAvailable(pugixml)
 endif()
 
-# --- 3. توجيه CMake لمسار Qt6 الصحيح لكل معمارية أندرويد تلقائياً ---
-if (ANDROID AND DEFINED QT_HOST_PATH)
-    get_filename_component(QT_BASE_DIR "${QT_HOST_PATH}" DIRECTORY)
-    if (ANDROID_ABI STREQUAL "arm64-v8a")
-        list(PREPEND CMAKE_PREFIX_PATH "${QT_BASE_DIR}/android_arm64_v8a")
-    elseif (ANDROID_ABI STREQUAL "armeabi-v7a")
-        list(PREPEND CMAKE_PREFIX_PATH "${QT_BASE_DIR}/android_armv7")
-    elseif (ANDROID_ABI STREQUAL "x86_64")
-        list(PREPEND CMAKE_PREFIX_PATH "${QT_BASE_DIR}/android_x86_64")
-    endif()
-endif()
+# --- 3. أندرويد: لا حاجة لتوجيه CMAKE_PREFIX_PATH يدوياً ---
+# يُبنى المشروع عبر qt.toolchain.cmake الخاص بكل معمارية (انظر release.yml)،
+# وهو يضبط مسار Qt الصحيح و QT_HOST_PATH تلقائياً.
 
 # --- 4. مكتبات Qt6 (للواجهة والملفات عبر جميع الأنظمة) ---
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Qml Quick QuickControls2)
@@ -93,7 +94,9 @@ set(PROJECT_SOURCES
 )
 
 if (ANDROID)
-    add_library(openlibrary SHARED ${PROJECT_SOURCES})
+    # qt_add_executable ينتج libopenlibrary_<abi>.so بالتسمية التي يتوقعها
+    # androiddeployqt ويفعّل الهدف `apk` الذي يحزّم Qt والإضافات و QML
+    qt_add_executable(openlibrary ${PROJECT_SOURCES})
 elseif (WIN32)
     add_executable(openlibrary WIN32 ${PROJECT_SOURCES})
 else()
@@ -107,6 +110,19 @@ set_target_properties(openlibrary PROPERTIES
 )
 
 target_include_directories(openlibrary PRIVATE src)
+
+if (ANDROID)
+    set_target_properties(openlibrary PROPERTIES
+        QT_ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android"
+        QT_ANDROID_PACKAGE_NAME       "com.ahmed_x86.openlibrary"
+        QT_ANDROID_VERSION_NAME       "${PROJECT_VERSION}"
+        QT_ANDROID_VERSION_CODE       125
+        QT_ANDROID_MIN_SDK_VERSION    24
+        QT_ANDROID_TARGET_SDK_VERSION 34
+        # ليفحص androiddeployqt ملفات QML ويضمّن QtQuick.Controls وبقية الوحدات
+        QT_QML_ROOT_PATH              "${CMAKE_CURRENT_SOURCE_DIR}/ui"
+    )
+endif()
 
 # ربط مكتبة libzip
 if (TARGET PkgConfig::LIBZIP)
