@@ -29,7 +29,7 @@ public class MainActivity extends QtActivity {
     // ملاحظة: لا يوجد System.loadLibrary هنا، فـ QtActivity يتولى التحميل.
 
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
+    public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         tryInitJni();
     }
