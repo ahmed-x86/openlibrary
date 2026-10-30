@@ -1,6 +1,8 @@
 <!DOCTYPE RCC>
 <RCC version="1.0">
     <qresource prefix="/ui">
+        <file>qmldir</file>
+        <file>Theme.qml</file>
         <file>ShadcnButton.qml</file>
         <file>IconButton.qml</file>
         <file>TabButton.qml</file>
@@ -9,11 +11,10 @@
         <file>BottomNavigation.qml</file>
         <file>AboutPage.qml</file>
         <file>main.qml</file>
-        <file>icons/github.svg</file>
-        <file>icons/info.svg</file>
-        <file>icons/telegram.svg</file>
-        <file>icons/book.svg</file>
-        <file>icons/next.svg</file>
-        <file>icons/prev.svg</file>
+        <file>Icon.qml</file>
+        <file>LogoMark.qml</file>
+        <file>Tag.qml</file>
+        <file>SocialChip.qml</file>
+        <file>ChoiceCard.qml</file>
     </qresource>
 </RCC>
