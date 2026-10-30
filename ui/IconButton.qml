@@ -1,28 +1,32 @@
 import QtQuick
-import QtQuick.Controls
 
-ToolButton {
+Rectangle {
     id: root
 
-    property url iconSource: ""
+    property string iconName: ""
+    property real iconSize: 20
+    property color iconColor: Theme.textMuted
+    signal clicked()
 
-    implicitWidth: 36
-    implicitHeight: 36
-    padding: 0
-    display: AbstractButton.IconOnly
+    implicitWidth: 40
+    implicitHeight: 40
+    radius: 10
+    color: area.pressed ? Theme.border : (area.containsMouse ? Theme.surfaceHi : "transparent")
 
-    icon.source: root.iconSource
-    icon.width: 20
-    icon.height: 20
-    icon.color: hovered || pressed ? Theme.text : Theme.textMuted
+    Behavior on color { ColorAnimation { duration: 120 } }
 
-    background: Rectangle {
-        radius: 8
-        color: root.pressed || root.hovered ? Theme.border : "transparent"
-        Behavior on color { ColorAnimation { duration: 120 } }
+    Icon {
+        anchors.centerIn: parent
+        name: root.iconName
+        size: root.iconSize
+        color: (area.containsMouse || area.pressed) ? Theme.text : root.iconColor
     }
 
-    HoverHandler {
+    MouseArea {
+        id: area
+        anchors.fill: parent
+        hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
+        onClicked: root.clicked()
     }
 }
