@@ -42,13 +42,6 @@ jobs:
           echo "=== Staged files ==="
           ls -la staging/
 
-      - name: Create Portable Archive (patchelf + $ORIGIN)
-        run: |
-          mkdir -p portable/OpenLibrary
-          cp -a staging/* portable/OpenLibrary/
-          patchelf --set-rpath '$ORIGIN' portable/OpenLibrary/openlibrary
-          tar czf OpenLibrary-Linux-Portable.tar.gz -C portable OpenLibrary
-
       - name: Prepare package-ready binary (RPATH = /usr/lib/openlibrary)
         run: |
           mkdir -p pkg-staging
@@ -65,12 +58,6 @@ jobs:
         with:
           name: OpenLibrary-Linux-ELF
           path: openlibrary-elf-glibc
-
-      - name: Upload Portable Archive
-        uses: actions/upload-artifact@v4
-        with:
-          name: OpenLibrary-Linux-Portable
-          path: OpenLibrary-Linux-Portable.tar.gz
 
       - name: Upload package-ready build outputs
         uses: actions/upload-artifact@v4
@@ -441,24 +428,65 @@ jobs:
           name: OpenLibrary-Alpine-apk
           path: OpenLibrary-Alpine.apk
 
-  # ===== Arch Linux: يُبنى من المصدر داخل حاوية Arch نفسها (Qt الخاص بـ Arch) =====
-  # لا يعتمد على باينري Ubuntu إطلاقاً، لذلك لا تظهر مشكلة copy relocation
-  build-arch:
-    name: Build Arch Package (native, inside archlinux container)
+  # ===== Arch Linux - المرحلة 1: باينري فقط (بدون تغليف) يُبنى داخل حاوية Arch =====
+  build-arch-elf:
+    name: Build Arch ELF (native, no packaging)
     runs-on: ubuntu-latest
     container:
       image: archlinux:base-devel
     steps:
       - name: Install Build Dependencies
         run: |
-          pacman -Syu --noconfirm --needed git sudo cmake ninja pkgconf \
+          pacman -Syu --noconfirm --needed git cmake ninja pkgconf \
             qt6-base qt6-declarative qt6-svg libzip pugixml fontconfig
 
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Build Project
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+          cmake --build build
+
+      - name: Stage files
+        run: |
+          DESTDIR="$PWD/arch-root" cmake --install build
+          strip --strip-unneeded arch-root/usr/bin/openlibrary || true
+          cp arch-root/usr/bin/openlibrary openlibrary-elf-arch
+          ls -la openlibrary-elf-arch
+
+      - name: Upload Arch ELF (يُنشر في الإصدار)
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenLibrary-Arch-ELF
+          path: openlibrary-elf-arch
+
+      - name: Upload install tree (للمرحلة 2 فقط، لا يُنشر)
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenLibrary-Arch-PkgBuild
+          path: arch-root/
+
+  # ===== Arch Linux - المرحلة 2: تغليف الباينري الجاهز فقط (لا إعادة بناء) =====
+  build-arch:
+    name: Package Arch (.pkg.tar.zst) from the ELF
+    needs: build-arch-elf
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:base-devel
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download Arch install tree
+        uses: actions/download-artifact@v4
+        with:
+          name: OpenLibrary-Arch-PkgBuild
+          path: arch-root
+
       - name: Create Non-root Build User
         run: |
+          pacman -Syu --noconfirm --needed sudo
           useradd -m builder
           echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
           chown -R builder:builder "$GITHUB_WORKSPACE"
@@ -466,7 +494,6 @@ jobs:
       - name: Write PKGBUILD
         run: |
           VER="$(grep -oP 'project\(OpenLibrary VERSION \K[0-9.]+' CMakeLists.txt)"
-          echo "Version from CMakeLists: $VER"
           mkdir -p arch-pkg
           cat > arch-pkg/PKGBUILD <<EOF
           pkgname=openlibrary
@@ -477,29 +504,20 @@ jobs:
           url="https://github.com/ahmed-x86/openlibrary"
           license=('GPL')
           depends=('fontconfig' 'qt6-base' 'qt6-declarative' 'qt6-svg' 'libzip' 'pugixml' 'shared-mime-info' 'desktop-file-utils')
-          makedepends=('cmake' 'ninja')
-          options=('!debug' '!lto')
-
-          build() {
-              cmake -B "\$srcdir/build" -S "\$SRCROOT" -G Ninja \\
-                  -DCMAKE_INSTALL_PREFIX=/usr \\
-                  -DCMAKE_BUILD_TYPE=Release
-              cmake --build "\$srcdir/build"
-          }
+          options=('!debug' '!strip' '!lto')
 
           package() {
-              DESTDIR="\$pkgdir" cmake --install "\$srcdir/build"
+              cp -a "\$SRCROOT/arch-root/." "\$pkgdir/"
+              chmod 755 "\$pkgdir/usr/bin/openlibrary"
           }
           EOF
-          sed -i 's/^          //' arch-pkg/PKGBUILD
           cat arch-pkg/PKGBUILD
 
-      - name: Build Package with makepkg
+      - name: Build Package with makepkg (no compile)
         run: |
-          chown -R builder:builder arch-pkg
+          chown -R builder:builder arch-pkg arch-root
           cd arch-pkg
-          su builder -c "SRCROOT='$GITHUB_WORKSPACE' makepkg -s --noconfirm"
-          ls -la
+          su builder -c "SRCROOT='$GITHUB_WORKSPACE' makepkg -d --noconfirm"
           mv openlibrary-*-x86_64.pkg.tar.zst ../OpenLibrary-Linux.pkg.tar.zst
 
       - name: Upload Arch Package Artifact
@@ -596,6 +614,179 @@ jobs:
         with:
           name: OpenLibrary-Void-musl-xbps
           path: OpenLibrary-Void-musl.xbps
+
+  # ===== AppImage + أرشيف tar.gz فيه كل المكتبات (glibc، Qt الرسمي) =====
+  build-appimage:
+    name: Build AppImage + Bundled tar.gz
+    runs-on: ubuntu-22.04   # glibc أقدم = توافق أوسع
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build build-essential pkg-config imagemagick \
+            libfontconfig1-dev libgl1-mesa-dev libglu1-mesa-dev libzip-dev libpugixml-dev \
+            libxkbcommon-dev libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 \
+            libxcb-keysyms1 libxcb-render-util0 libxcb-shape0 libxcb-xkb1 libxcb-xinerama0 \
+            libxcb-randr0 libxcb-sync1 libxcb-xfixes0 libxcb-shm0
+
+      - name: Install Qt6
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.7.3'
+          host: 'linux'
+          target: 'desktop'
+          arch: 'linux_gcc_64'
+          cache: true
+
+      - name: Build & install into AppDir
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR"
+          cmake --build build
+          DESTDIR="$PWD/AppDir" cmake --install build
+          # ملف desktop صالح للـ AppImage
+          D=AppDir/usr/share/applications/openlibrary.desktop
+          sed -i 's|^Exec=.*|Exec=openlibrary %F|; s|^Icon=.*|Icon=openlibrary|' "$D"
+          grep -q '^Icon=' "$D" || echo 'Icon=openlibrary' >> "$D"
+          # أيقونة (أو بديلة لو غير موجودة)
+          if [ -f assets/icon.png ]; then cp assets/icon.png openlibrary.png
+          else convert -size 256x256 xc:'#3b82f6' openlibrary.png; fi
+
+      - name: Download linuxdeploy
+        run: |
+          mkdir -p tools && cd tools
+          for u in \
+            https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage \
+            https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage \
+            https://github.com/linuxdeploy/linuxdeploy-plugin-appimage/releases/download/continuous/linuxdeploy-plugin-appimage-x86_64.AppImage; do
+            curl -fsSLO "$u"
+          done
+          chmod +x *.AppImage
+
+      - name: Bundle libraries & create AppImage
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: 1
+          QML_SOURCES_PATHS: ${{ github.workspace }}/ui
+          LD_LIBRARY_PATH: ${{ env.QT_ROOT_DIR }}/lib
+        run: |
+          export QMAKE="$QT_ROOT_DIR/bin/qmake"
+          export PATH="$PWD/tools:$PATH"
+          ./tools/linuxdeploy-x86_64.AppImage --appdir AppDir --plugin qt \
+            --desktop-file AppDir/usr/share/applications/openlibrary.desktop \
+            --icon-file openlibrary.png --output appimage
+          mv ./*.AppImage OpenLibrary-x86_64.AppImage
+          ls -la OpenLibrary-x86_64.AppImage
+
+      - name: Create tar.gz with all libraries
+        run: |
+          mkdir -p bundle/OpenLibrary
+          cp -a AppDir/usr bundle/OpenLibrary/
+          cat > bundle/OpenLibrary/openlibrary <<'EOS'
+          #!/bin/sh
+          HERE="$(dirname "$(readlink -f "$0")")"
+          export LD_LIBRARY_PATH="$HERE/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          exec "$HERE/usr/bin/openlibrary" "$@"
+          EOS
+          chmod +x bundle/OpenLibrary/openlibrary
+          tar czf OpenLibrary-Linux-Portable.tar.gz -C bundle OpenLibrary
+
+      - name: Upload AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenLibrary-AppImage
+          path: OpenLibrary-x86_64.AppImage
+
+      - name: Upload Portable tar.gz
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenLibrary-Linux-Portable
+          path: OpenLibrary-Linux-Portable.tar.gz
+
+  # ===== ELF ستاتيك بالكامل (Qt + كل المكتبات داخل الملف، musl) - تجريبي =====
+  # continue-on-error: لو فشل لا يمنع بقية الإصدار. أول بناء طويل (يبني Qt من المصدر)
+  # ثم يُخزَّن في الكاش فتصبح التالية سريعة.
+  build-static-elf:
+    name: Build Static ELF (fully static)
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    continue-on-error: true
+    container:
+      image: alpine:latest
+    env:
+      QT_VER: 6.7.3
+      QT_PREFIX: /opt/qt-static
+    steps:
+      - name: Install Build Dependencies
+        run: |
+          apk update
+          apk add --no-cache build-base cmake ninja perl python3 git linux-headers pkgconf bash curl xz tar zstd upx
+          for p in libxcb-dev libxcb-static xcb-util-dev xcb-util-static xcb-util-image-dev xcb-util-image-static \
+                   xcb-util-keysyms-dev xcb-util-keysyms-static xcb-util-renderutil-dev xcb-util-renderutil-static \
+                   xcb-util-wm-dev xcb-util-wm-static xcb-util-cursor-dev xcb-util-cursor-static \
+                   libxkbcommon-dev libxkbcommon-static libxau-dev libxau-static libxdmcp-dev libxdmcp-static \
+                   libx11-dev libx11-static; do
+            apk add --no-cache "$p" || echo "::warning::package not available: $p"
+          done
+
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Cache static Qt
+        id: qtcache
+        uses: actions/cache@v4
+        with:
+          path: /opt/qt-static
+          key: qt-static-${{ env.QT_VER }}-alpine-v1
+
+      - name: Build static Qt from source (first run only)
+        if: steps.qtcache.outputs.cache-hit != 'true'
+        run: |
+          set -eux
+          mkdir -p /tmp/qt && cd /tmp/qt
+          BASE="https://download.qt.io/archive/qt/6.7/${QT_VER}/submodules"
+          for m in qtbase qtshadertools qtdeclarative qtsvg; do
+            curl -fsSL "$BASE/$m-everywhere-src-${QT_VER}.tar.xz" | tar xJ
+          done
+          mkdir b-qtbase && cd b-qtbase
+          ../qtbase-everywhere-src-${QT_VER}/configure -prefix "$QT_PREFIX" -static -release \
+            -opensource -confirm-license -nomake examples -nomake tests \
+            -no-opengl -no-dbus -no-icu -no-openssl -no-glib -no-cups -no-fontconfig \
+            -qt-zlib -qt-libpng -qt-libjpeg -qt-freetype -qt-harfbuzz -qt-pcre \
+            -xcb -xkbcommon
+          cmake --build . --parallel
+          cmake --install .
+          cd /tmp/qt
+          for m in qtshadertools qtdeclarative qtsvg; do
+            mkdir "b-$m" && cd "b-$m"
+            "$QT_PREFIX/bin/qt-configure-module" "../$m-everywhere-src-${QT_VER}" -- \
+              -DQT_BUILD_EXAMPLES=OFF -DQT_BUILD_TESTS=OFF
+            cmake --build . --parallel
+            cmake --install .
+            cd /tmp/qt
+          done
+
+      - name: Build static OpenLibrary
+        run: |
+          set -eux
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$QT_PREFIX" \
+            -DOPENLIBRARY_STATIC_BUILD=ON \
+            -DCMAKE_EXE_LINKER_FLAGS="-static"
+          cmake --build build
+          ldd build/openlibrary || true
+          cp build/openlibrary openlibrary-elf-static
+          strip openlibrary-elf-static || true
+          upx --best --lzma openlibrary-elf-static || true
+          ls -la openlibrary-elf-static
+
+      - name: Upload Static ELF
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenLibrary-Linux-Static-ELF
+          path: openlibrary-elf-static
 
   # ===== أندرويد (Qt6 + CMake + androiddeployqt) - 3 معماريات + Universal =====
   build-android:
@@ -816,7 +1007,7 @@ jobs:
   # ===== الإصدار النهائي =====
   release:
     name: Create GitHub Release
-    needs: [build-linux-packages, build-linux-packages-musl, build-windows, build-arch, build-void, build-alpine-apk, build-android]
+    needs: [build-linux-packages, build-linux-packages-musl, build-windows, build-arch-elf, build-arch, build-appimage, build-static-elf, build-void, build-alpine-apk, build-android]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     steps:
@@ -859,6 +1050,13 @@ jobs:
             echo "| **musl**  | $(cell openlibrary-elf-musllibc) | $(cell OpenLibrary-Linux-musl-Portable.tar.gz) |$(cell OpenLibrary-Linux-musl.deb) | $(cell OpenLibrary-Linux-musl.rpm) |----- | $(cell OpenLibrary-Void-musl.xbps) |$(cell OpenLibrary-Alpine.apk) |"
             echo ""
 
+            echo "### 📦 نسخ لينكس متكاملة (بدون الحاجة لأي مكتبات)"
+            echo ""
+            echo "| AppImage | tar.gz (فيه كل المكتبات) | ELF ستاتيك | Arch ELF (بدون تغليف) | Arch .pkg.tar.zst |"
+            echo "|:---:|:---:|:---:|:---:|:---:|"
+            echo "| $(cell OpenLibrary-x86_64.AppImage) | $(cell OpenLibrary-Linux-Portable.tar.gz) | $(cell openlibrary-elf-static) | $(cell openlibrary-elf-arch) | $(cell OpenLibrary-Linux.pkg.tar.zst) |"
+            echo ""
+
             echo "### 🤖 أندرويد"
             echo ""
             echo "| التحميل \\ المعمارية | x86_64 | armv7 | armv8 | 🌐 عام (Universal) |"
@@ -895,6 +1093,9 @@ jobs:
           files: |
             artifacts/openlibrary-elf-glibc
             artifacts/openlibrary-elf-musllibc
+            artifacts/openlibrary-elf-arch
+            artifacts/openlibrary-elf-static
+            artifacts/OpenLibrary-x86_64.AppImage
             artifacts/OpenLibrary-Linux-Portable.tar.gz
             artifacts/OpenLibrary-Linux-musl-Portable.tar.gz
             artifacts/OpenLibrary-Linux.deb
