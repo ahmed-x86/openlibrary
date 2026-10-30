@@ -1,0 +1,102 @@
+name: Build static Qt (one-time)
+
+# يُشغَّل يدوياً مرة واحدة فقط (أو عند تغيير إصدار Qt)، وينشر Qt ستاتيك جاهز
+# في Release باسم qt-static-<version>. بعدها release.yml يحمّله بدل ما يبنيه.
+on:
+  workflow_dispatch:
+    inputs:
+      qt_version:
+        description: 'Qt version'
+        default: '6.7.3'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-qt:
+    name: Build static Qt (Alpine / musl)
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    container:
+      image: alpine:latest
+    env:
+      QT_VER: ${{ inputs.qt_version }}
+      QT_PREFIX: /opt/qt-static
+    steps:
+      - name: Install Build Dependencies
+        run: |
+          apk update
+          apk add --no-cache build-base cmake ninja perl python3 git linux-headers pkgconf bash curl xz tar zstd
+          for p in libxcb-dev libxcb-static xcb-util-dev xcb-util-static xcb-util-image-dev xcb-util-image-static \
+                   xcb-util-keysyms-dev xcb-util-keysyms-static xcb-util-renderutil-dev xcb-util-renderutil-static \
+                   xcb-util-wm-dev xcb-util-wm-static xcb-util-cursor-dev xcb-util-cursor-static \
+                   libxkbcommon-dev libxkbcommon-static libxau-dev libxau-static libxdmcp-dev libxdmcp-static \
+                   libx11-dev libx11-static; do
+            apk add --no-cache "$p" || echo "::warning::package not available: $p"
+          done
+
+      - name: Build static Qt from source
+        run: |
+          set -eux
+          MAJMIN="${QT_VER%.*}"
+          mkdir -p /tmp/qt && cd /tmp/qt
+          BASE="https://download.qt.io/archive/qt/${MAJMIN}/${QT_VER}/submodules"
+          for m in qtbase qtshadertools qtdeclarative qtsvg; do
+            curl -fsSL "$BASE/$m-everywhere-src-${QT_VER}.tar.xz" | tar xJ
+          done
+          mkdir b-qtbase && cd b-qtbase
+          ../qtbase-everywhere-src-${QT_VER}/configure -prefix "$QT_PREFIX" -static -release \
+            -opensource -confirm-license -nomake examples -nomake tests \
+            -no-opengl -no-dbus -no-icu -no-openssl -no-glib -no-cups -no-fontconfig \
+            -qt-zlib -qt-libpng -qt-libjpeg -qt-freetype -qt-harfbuzz -qt-pcre \
+            -xcb -xkbcommon
+          cmake --build . --parallel
+          cmake --install .
+          cd /tmp/qt
+          for m in qtshadertools qtdeclarative qtsvg; do
+            mkdir "b-$m" && cd "b-$m"
+            "$QT_PREFIX/bin/qt-configure-module" "../$m-everywhere-src-${QT_VER}" -- \
+              -DQT_BUILD_EXAMPLES=OFF -DQT_BUILD_TESTS=OFF
+            cmake --build . --parallel
+            cmake --install .
+            cd /tmp/qt
+          done
+
+      - name: Shrink & package
+        run: |
+          set -eux
+          find "$QT_PREFIX" -name '*.a' -exec strip --strip-debug {} + 2>/dev/null || true
+          rm -rf "$QT_PREFIX/doc" "$QT_PREFIX/examples"
+          tar -I 'zstd -19 -T0' -cf "qt-static-${QT_VER}-alpine-x86_64.tar.zst" -C /opt qt-static
+          ls -lh "qt-static-${QT_VER}-alpine-x86_64.tar.zst"
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: qt-static-package
+          path: qt-static-${{ inputs.qt_version }}-alpine-x86_64.tar.zst
+          compression-level: 0
+
+  publish:
+    name: Publish to Releases
+    needs: build-qt
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download package
+        uses: actions/download-artifact@v4
+        with:
+          name: qt-static-package
+          path: pkg
+
+      - name: Publish release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: qt-static-${{ inputs.qt_version }}
+          name: "Static Qt ${{ inputs.qt_version }} (build tooling, not an app release)"
+          body: "Prebuilt static Qt for the static ELF build. Used by release.yml. Do not delete."
+          prerelease: true
+          make_latest: false
+          files: pkg/*.tar.zst
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
