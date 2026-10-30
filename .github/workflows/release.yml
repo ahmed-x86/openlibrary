@@ -677,7 +677,8 @@ jobs:
           ./tools/linuxdeploy-x86_64.AppImage --appdir AppDir --plugin qt \
             --desktop-file AppDir/usr/share/applications/openlibrary.desktop \
             --icon-file openlibrary.png --output appimage
-          mv ./*.AppImage OpenLibrary-x86_64.AppImage
+          APPIMG="$(ls -1 ./*.AppImage | head -n 1)"
+          [ "$APPIMG" = "./OpenLibrary-x86_64.AppImage" ] || mv "$APPIMG" OpenLibrary-x86_64.AppImage
           ls -la OpenLibrary-x86_64.AppImage
 
       - name: Create tar.gz with all libraries
