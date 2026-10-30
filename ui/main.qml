@@ -102,7 +102,8 @@ Window {
 
                     ShadcnButton {
                         visible: !root.readingMode && !root.showInfo && root.currentTab === 0
-                        text: "📖 فتح كتاب"
+                        text: "فتح كتاب"
+                        iconSource: "icons/book.svg"
                         Layout.preferredWidth: 120
                         onClicked: root.openEpubDialog()
                     }
@@ -205,7 +206,8 @@ Window {
 
                     ShadcnButton {
                         Layout.alignment: Qt.AlignHCenter
-                        text: "📖 فتح كتاب EPUB"
+                        text: "فتح كتاب EPUB"
+                        iconSource: "icons/book.svg"
                         Layout.preferredWidth: 200
                         Layout.preferredHeight: 44
                         onClicked: root.openEpubDialog()
@@ -482,7 +484,8 @@ Window {
                         spacing: 8
 
                         ShadcnButton {
-                            text: "← التالي"
+                            text: "التالي"
+                            iconSource: "icons/next.svg"
                             primary: false
                             disabled: !root.canGoNext
                             Layout.preferredWidth: root.isNarrow ? 88 : 100
@@ -597,7 +600,8 @@ Window {
                         Item { Layout.fillWidth: true }
 
                         ShadcnButton {
-                            text: "السابق →"
+                            text: "السابق"
+                            iconSource: "icons/prev.svg"
                             primary: false
                             disabled: !root.canGoPrev
                             Layout.preferredWidth: root.isNarrow ? 88 : 100

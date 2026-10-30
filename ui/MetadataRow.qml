@@ -38,6 +38,7 @@ Rectangle {
             text: root.label
             color: Theme.textMuted
             font.pixelSize: 13
+            wrapMode: Text.WrapAnywhere
             font.weight: Font.DemiBold
             verticalAlignment: Text.AlignVCenter
             horizontalAlignment: Text.AlignRight

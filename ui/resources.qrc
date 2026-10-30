@@ -12,5 +12,8 @@
         <file>icons/github.svg</file>
         <file>icons/info.svg</file>
         <file>icons/telegram.svg</file>
+        <file>icons/book.svg</file>
+        <file>icons/next.svg</file>
+        <file>icons/prev.svg</file>
     </qresource>
 </RCC>

@@ -1,9 +1,41 @@
 [Desktop Entry]
+Version=1.0
 Type=Application
 Name=OpenLibrary
+Name[ar]=المكتبة المفتوحة
+Name[fr]=OpenLibrary
+Name[es]=OpenLibrary
+Name[de]=OpenLibrary
+Name[tr]=OpenLibrary
+Name[ru]=OpenLibrary
+GenericName=EPUB E-Book Reader
+GenericName[ar]=قارئ كتب إلكترونية
+GenericName[fr]=Lecteur de livres EPUB
+GenericName[es]=Lector de libros EPUB
+GenericName[de]=EPUB-E-Book-Reader
+GenericName[tr]=EPUB E-Kitap Okuyucu
+GenericName[ru]=Чтение книг EPUB
 Comment=Read EPUB books comfortably
+Comment[ar]=قارئ ملفات EPUB سريع، خفيف، ومريح للعين
+Comment[fr]=Lisez des livres EPUB confortablement
+Comment[es]=Lee libros EPUB cómodamente
+Comment[de]=EPUB-Bücher bequem lesen
+Comment[tr]=EPUB kitaplarını rahatça okuyun
+Comment[ru]=Удобное чтение книг в формате EPUB
+
+# كلمات مفتاحية للبحث السريع في النظام
+Keywords=epub;book;ebook;reader;literature;library;
+Keywords[ar]=كتاب;كتب;قارئ;مكتبة;إيبوب;قراءة;
+Keywords[fr]=epub;livre;lecteur;bibliothèque;
+Keywords[es]=epub;libro;lector;biblioteca;
+Keywords[de]=epub;buch;leser;bibliothek;
+Keywords[tr]=epub;kitap;okuyucu;kütüphane;
+Keywords[ru]=книга;читалка;библиотека;epub;
 Exec=openlibrary %f
+TryExec=openlibrary
 Icon=book
 Terminal=false
-Categories=Office;Viewer;Literature;
+StartupNotify=true
+StartupWMClass=openlibrary
+Categories=Office;Viewer;Literature;Qt;
 MimeType=application/epub+zip;

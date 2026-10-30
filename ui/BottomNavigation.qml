@@ -18,7 +18,7 @@ ColumnLayout {
 
     Rectangle {
         Layout.fillWidth: true
-        implicitHeight: 65
+        implicitHeight: 50
         color: Theme.surface
 
         Item {
