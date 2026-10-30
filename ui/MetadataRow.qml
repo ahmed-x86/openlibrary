@@ -1,47 +1,60 @@
 import QtQuick
 import QtQuick.Layouts
 
-Rectangle {
+// صف بيانات وصفية: العنوان فوق والقيمة تحته بعرض كامل،
+// والقيم الطويلة (مثل المعرّف urn:uuid:...) تُكسر على أكثر من سطر ولا تخرج عن البطاقة.
+Item {
     id: root
 
     property string label: ""
     property string value: ""
+    property bool mono: false     // خط ثابت العرض للمعرّفات والروابط
+    property bool last: false     // آخر صف: بدون فاصل سفلي
 
     visible: root.value !== ""
     Layout.fillWidth: true
-    implicitHeight: visible ? Math.max(48, rowLayout.implicitHeight + 20) : 0
-    color: "transparent"
+    implicitHeight: visible ? col.implicitHeight + 28 : 0
 
-    RowLayout {
-        id: rowLayout
-        anchors.fill: parent
+    ColumnLayout {
+        id: col
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
         anchors.leftMargin: 20
         anchors.rightMargin: 20
-        spacing: 16
+        anchors.topMargin: 14
+        spacing: 4
 
         Text {
             Layout.fillWidth: true
-            text: root.value
-            color: Theme.text
-            font.pixelSize: 13
-            wrapMode: Text.WordWrap
-            verticalAlignment: Text.AlignVCenter
+            text: root.label
+            color: Theme.textMuted
+            font.pixelSize: 12
+            font.weight: Font.DemiBold
             horizontalAlignment: Text.AlignRight
         }
 
         Text {
-            Layout.preferredWidth: 110
-            Layout.minimumWidth: 95
-            Layout.maximumWidth: 120
-            Layout.alignment: Qt.AlignTop | Qt.AlignRight
-            topPadding: 4
-            text: root.label
-            color: Theme.textMuted
-            font.pixelSize: 13
-            wrapMode: Text.WrapAnywhere
-            font.weight: Font.DemiBold
-            verticalAlignment: Text.AlignVCenter
+            Layout.fillWidth: true
+            Layout.minimumWidth: 0
+            text: root.value
+            color: Theme.text
+            font.pixelSize: root.mono ? 13 : 14
+            font.family: root.mono ? "monospace" : Qt.application.font.family
+            wrapMode: Text.Wrap            // يكسر الكلمات الطويلة بدون مسافات
+            lineHeight: 1.3
             horizontalAlignment: Text.AlignRight
         }
+    }
+
+    Rectangle {
+        visible: !root.last
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.leftMargin: 20
+        anchors.rightMargin: 20
+        height: 1
+        color: Theme.border
     }
 }
