@@ -29,6 +29,7 @@ Window {
     property bool editingChapter: false
     property bool dropdownOpen: false
     readonly property bool isNarrow: root.width < 600
+    readonly property int pageMargin: root.isNarrow ? 16 : 32
 
     property string bookTitle: ""
     property string bookAuthor: ""
@@ -92,7 +93,7 @@ Window {
 
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: root.isNarrow ? 14 : 24
+                anchors.leftMargin: root.isNarrow ? 10 : 20
                 anchors.rightMargin: root.isNarrow ? 14 : 24
                 spacing: 12
 
@@ -103,60 +104,50 @@ Window {
                     ShadcnButton {
                         visible: !root.readingMode && !root.showInfo && root.currentTab === 0
                         text: "فتح كتاب"
-                        iconSource: "icons/book.svg"
+                        iconName: "book"
                         Layout.preferredWidth: 120
                         onClicked: root.openEpubDialog()
                     }
 
                     IconButton {
                         visible: root.readingMode && !root.showInfo
-                        iconSource: "icons/info.svg"
+                        iconName: "info"
                         onClicked: root.showInfo = true
                     }
                 }
 
-                Item { Layout.fillWidth: true }
-
-                // الجهة اليمنى (العنوان + الشعار + زر الرجوع)
-                RowLayout {
+                // العنوان
+                Text {
                     Layout.fillWidth: true
-                    spacing: 12
+                    text: root.showInfo ? "معلومات الكتاب"
+                        : (root.readingMode ? root.bookTitle
+                        : (root.currentTab === 1 ? "الإعدادات"
+                        : (root.currentTab === 2 ? "حول" : "OpenLibrary")))
+                    color: Theme.text
+                    font.pixelSize: root.isNarrow ? 16 : 18
+                    font.weight: Font.Bold
+                    verticalAlignment: Text.AlignVCenter
+                    horizontalAlignment: Text.AlignRight
+                    elide: Text.ElideLeft
+                }
 
-                    Text {
-                        Layout.fillWidth: true
-                        text: root.showInfo ? "معلومات الكتاب"
-                            : (root.readingMode ? root.bookTitle
-                            : (root.currentTab === 1 ? "الإعدادات"
-                            : (root.currentTab === 2 ? "حول" : "OpenLibrary")))
-                        color: Theme.text
-                        font.pixelSize: root.isNarrow ? 16 : 18
-                        font.weight: Font.Bold
-                        verticalAlignment: Text.AlignVCenter
-                        horizontalAlignment: Text.AlignRight
-                        elide: Text.ElideLeft
-                    }
-
-                    Rectangle {
-                        width: 24
-                        height: 24
-                        color: Theme.text
-                        radius: 4
-                    }
-
-                    ShadcnButton {
-                        visible: root.readingMode || root.showInfo
-                        text: root.showInfo ? "القراءة ←" : "← رجوع"
-                        primary: false
-                        Layout.preferredWidth: 88
-                        Layout.preferredHeight: 32
-                        onClicked: {
-                            if (root.showInfo) {
-                                root.showInfo = false
-                            } else {
-                                root.goBackHome()
-                            }
+                // أقصى اليمين: سهم الرجوع داخل الكتاب، أو الشعار في باقي الصفحات
+                IconButton {
+                    visible: root.readingMode || root.showInfo
+                    iconName: "arrow-right"
+                    iconColor: Theme.text
+                    onClicked: {
+                        if (root.showInfo) {
+                            root.showInfo = false
+                        } else {
+                            root.goBackHome()
                         }
                     }
+                }
+
+                LogoMark {
+                    visible: !(root.readingMode || root.showInfo)
+                    size: 32
                 }
             }
 
@@ -179,15 +170,42 @@ Window {
                 visible: !root.readingMode && !root.showInfo && root.currentTab === 0
 
                 ColumnLayout {
-                    width: Math.min(parent.width - 32, 560)
+                    width: Math.min(parent.width - 32, 520)
                     anchors.centerIn: parent
-                    spacing: 18
+                    spacing: 16
+
+                    Item {
+                        Layout.alignment: Qt.AlignHCenter
+                        Layout.preferredWidth: 132
+                        Layout.preferredHeight: 132
+
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 66
+                            color: Theme.accentSoft
+                        }
+
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 106
+                            height: 106
+                            radius: 53
+                            color: "transparent"
+                            border.width: 1
+                            border.color: Theme.accentBorder
+                        }
+
+                        LogoMark {
+                            anchors.centerIn: parent
+                            size: 72
+                        }
+                    }
 
                     Text {
                         Layout.fillWidth: true
                         text: "مكتبتك الرقمية مفتوحة المصدر"
                         color: Theme.text
-                        font.pixelSize: root.isNarrow ? 22 : 26
+                        font.pixelSize: root.isNarrow ? 24 : 28
                         font.weight: Font.ExtraBold
                         horizontalAlignment: Text.AlignHCenter
                         wrapMode: Text.WordWrap
@@ -198,92 +216,107 @@ Window {
                         text: "قارئ ملفات EPUB سريع، خفيف، ومصمم ليكون مريحاً للعين."
                         color: Theme.textMuted
                         font.pixelSize: 14
+                        lineHeight: 1.4
                         horizontalAlignment: Text.AlignHCenter
                         wrapMode: Text.WordWrap
                     }
 
-                    Item { height: 4 }
+                    Item { Layout.preferredHeight: 4 }
 
                     ShadcnButton {
                         Layout.alignment: Qt.AlignHCenter
                         text: "فتح كتاب EPUB"
-                        iconSource: "icons/book.svg"
-                        Layout.preferredWidth: 200
-                        Layout.preferredHeight: 44
+                        iconName: "book"
+                        Layout.preferredWidth: 210
+                        Layout.preferredHeight: 46
                         onClicked: root.openEpubDialog()
+                    }
+
+                    RowLayout {
+                        Layout.alignment: Qt.AlignHCenter
+                        Layout.topMargin: 6
+                        spacing: 8
+
+                        Tag { text: "EPUB" }
+                        Tag { text: "مفتوح المصدر"; highlighted: true }
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        text: "متاح على لينكس وويندوز وأندرويد"
+                        color: Theme.textMuted
+                        font.pixelSize: 12
+                        horizontalAlignment: Text.AlignHCenter
                     }
                 }
             }
 
             // 2. صفحة الإعدادات
-            ColumnLayout {
+            Item {
                 anchors.fill: parent
-                anchors.margins: root.isNarrow ? 16 : 32
-                spacing: 24
                 visible: !root.readingMode && !root.showInfo && root.currentTab === 1
 
-                Text {
-                    Layout.fillWidth: true
-                    text: "الإعدادات"
-                    color: Theme.text
-                    font.pixelSize: 28
-                    font.weight: Font.ExtraBold
-                    horizontalAlignment: Text.AlignRight
-                }
+                ColumnLayout {
+                    width: Math.min(parent.width - root.pageMargin * 2, 640)
+                    anchors.top: parent.top
+                    anchors.topMargin: root.pageMargin
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: 16
 
-                Rectangle {
-                    Layout.fillWidth: true
-                    implicitHeight: settingsCol.implicitHeight + 48
-                    color: Theme.surface
-                    border.color: Theme.border
-                    border.width: 1
-                    radius: 12
+                    Rectangle {
+                        Layout.fillWidth: true
+                        implicitHeight: settingsCol.implicitHeight + 48
+                        color: Theme.surface
+                        border.color: Theme.border
+                        border.width: 1
+                        radius: 16
 
-                    ColumnLayout {
-                        id: settingsCol
-                        anchors.fill: parent
-                        anchors.margins: 24
-                        spacing: 16
+                        ColumnLayout {
+                            id: settingsCol
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            anchors.margins: 24
+                            spacing: 14
 
-                        Text {
-                            Layout.fillWidth: true
-                            text: "المظهر واللون"
-                            color: Theme.text
-                            font.pixelSize: 18
-                            font.weight: Font.Bold
-                            horizontalAlignment: Text.AlignRight
-                        }
-
-                        Rectangle {
-                            Layout.fillWidth: true
-                            height: 1
-                            color: Theme.border
-                        }
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 16
-
-                            Item { Layout.fillWidth: true }
-
-                            ShadcnButton {
-                                text: "الفاتح"
-                                primary: !Theme.isDark
-                                Layout.preferredWidth: 120
-                                onClicked: Theme.isDark = false
+                            Text {
+                                Layout.fillWidth: true
+                                text: "المظهر واللون"
+                                color: Theme.text
+                                font.pixelSize: 18
+                                font.weight: Font.Bold
+                                horizontalAlignment: Text.AlignRight
                             }
 
-                            ShadcnButton {
-                                text: "الغامق"
-                                primary: Theme.isDark
-                                Layout.preferredWidth: 120
-                                onClicked: Theme.isDark = true
+                            Text {
+                                Layout.fillWidth: true
+                                text: "اختر الوضع الأريح لعينيك."
+                                color: Theme.textMuted
+                                font.pixelSize: 13
+                                horizontalAlignment: Text.AlignRight
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 12
+
+                                ChoiceCard {
+                                    text: "الغامق"
+                                    iconName: "moon"
+                                    selected: Theme.isDark
+                                    onClicked: Theme.isDark = true
+                                }
+
+                                ChoiceCard {
+                                    text: "الفاتح"
+                                    iconName: "sun"
+                                    selected: !Theme.isDark
+                                    onClicked: Theme.isDark = false
+                                }
                             }
                         }
                     }
                 }
-
-                Item { Layout.fillHeight: true }
             }
 
             // 3. صفحة حول
@@ -299,7 +332,7 @@ Window {
                 anchors.fill: parent
                 visible: root.showInfo
                 contentWidth: width
-                contentHeight: infoLayout.implicitHeight + (root.isNarrow ? 32 : 64)
+                contentHeight: infoLayout.implicitHeight + root.pageMargin * 2
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
 
@@ -307,10 +340,10 @@ Window {
 
                 ColumnLayout {
                     id: infoLayout
-                    width: infoFlickable.width - (root.isNarrow ? 32 : 64)
-                    x: root.isNarrow ? 16 : 32
-                    y: root.isNarrow ? 16 : 32
-                    spacing: 24
+                    width: Math.min(infoFlickable.width - root.pageMargin * 2, 720)
+                    x: (infoFlickable.width - width) / 2
+                    y: root.pageMargin
+                    spacing: 16
 
                     // بطاقة عنوان الكتاب والمؤلف
                     Rectangle {
@@ -319,13 +352,30 @@ Window {
                         color: Theme.surface
                         border.color: Theme.border
                         border.width: 1
-                        radius: 12
+                        radius: 16
 
                         ColumnLayout {
                             id: headerInfoCol
                             anchors.fill: parent
                             anchors.margins: 24
-                            spacing: 8
+                            spacing: 10
+
+                            Rectangle {
+                                Layout.alignment: Qt.AlignHCenter
+                                Layout.preferredWidth: 56
+                                Layout.preferredHeight: 72
+                                radius: 8
+                                color: Theme.accentSoft
+                                border.width: 1
+                                border.color: Theme.accentBorder
+
+                                Icon {
+                                    anchors.centerIn: parent
+                                    name: "book"
+                                    size: 26
+                                    color: Theme.accent
+                                }
+                            }
 
                             Text {
                                 Layout.fillWidth: true
@@ -333,8 +383,9 @@ Window {
                                 color: Theme.text
                                 font.pixelSize: root.isNarrow ? 20 : 24
                                 font.weight: Font.ExtraBold
+                                lineHeight: 1.25
                                 horizontalAlignment: Text.AlignHCenter
-                                wrapMode: Text.WordWrap
+                                wrapMode: Text.Wrap
                             }
 
                             Text {
@@ -344,7 +395,7 @@ Window {
                                 color: Theme.textMuted
                                 font.pixelSize: 14
                                 horizontalAlignment: Text.AlignHCenter
-                                wrapMode: Text.WordWrap
+                                wrapMode: Text.Wrap
                             }
                         }
                     }
@@ -352,17 +403,19 @@ Window {
                     // جدول البيانات الوصفية
                     Rectangle {
                         Layout.fillWidth: true
-                        implicitHeight: metaCol.implicitHeight + 32
+                        implicitHeight: metaCol.implicitHeight + 16
                         color: Theme.surface
                         border.color: Theme.border
                         border.width: 1
-                        radius: 12
+                        radius: 16
+                        clip: true
 
                         ColumnLayout {
                             id: metaCol
-                            anchors.fill: parent
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.top: parent.top
                             anchors.topMargin: 16
-                            anchors.bottomMargin: 16
                             spacing: 0
 
                             Text {
@@ -385,24 +438,26 @@ Window {
                             MetadataRow { label: "العنوان";       value: root.bookTitle }
                             MetadataRow { label: "المؤلف";        value: root.bookAuthor }
                             MetadataRow { label: "اللغة";         value: root.metaLanguage }
-                            MetadataRow { label: "الناشر";        value: root.metaPublisher }
+                            MetadataRow { label: "الناشر";        value: root.metaPublisher; mono: true }
                             MetadataRow { label: "تاريخ النشر";   value: root.metaDate }
                             MetadataRow { label: "الوصف";         value: root.metaDescription }
                             MetadataRow { label: "الموضوع";       value: root.metaSubject }
-                            MetadataRow { label: "المعرف (ISBN)"; value: root.metaIdentifier }
-                            MetadataRow { label: "المصدر";        value: root.metaSource }
+                            MetadataRow { label: "المعرف (ISBN)"; value: root.metaIdentifier; mono: true }
+                            MetadataRow { label: "المصدر";        value: root.metaSource; mono: true }
                             MetadataRow { label: "الحقوق";        value: root.metaRights }
                             MetadataRow { label: "الصيغة";        value: root.metaFormat }
-                            MetadataRow { label: "عدد الفصول";    value: root.metaChapters }
+                            MetadataRow { label: "عدد الفصول";    value: root.metaChapters; last: true }
                         }
                     }
 
                     ShadcnButton {
                         Layout.alignment: Qt.AlignHCenter
-                        text: "العودة للقراءة →"
+                        text: "العودة للقراءة"
+                        iconName: "arrow-right"
+                        iconOnRight: true
                         primary: false
-                        Layout.preferredWidth: 160
-                        Layout.preferredHeight: 40
+                        Layout.preferredWidth: 170
+                        Layout.preferredHeight: 42
                         onClicked: root.showInfo = false
                     }
                 }
@@ -433,10 +488,20 @@ Window {
                     }
                 }
 
+                // شريط تقدّم القراءة (يمتلئ من اليمين)
                 Rectangle {
                     Layout.fillWidth: true
-                    height: 1
+                    height: 2
                     color: Theme.border
+
+                    Rectangle {
+                        anchors.right: parent.right
+                        height: parent.height
+                        width: root.chapterCount > 0 ? parent.width * root.currentChapterNum / root.chapterCount : 0
+                        color: Theme.accent
+
+                        Behavior on width { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+                    }
                 }
 
                 // منطقة نص الفصل القابلة للتمرير
@@ -474,7 +539,7 @@ Window {
                 // شريط التنقل بين الفصول
                 Rectangle {
                     Layout.fillWidth: true
-                    implicitHeight: 54
+                    implicitHeight: 56
                     color: Theme.bg
 
                     RowLayout {
@@ -485,11 +550,11 @@ Window {
 
                         ShadcnButton {
                             text: "التالي"
-                            iconSource: "icons/next.svg"
+                            iconName: "chevron-left"
                             primary: false
                             disabled: !root.canGoNext
-                            Layout.preferredWidth: root.isNarrow ? 88 : 100
-                            Layout.preferredHeight: 34
+                            Layout.preferredWidth: root.isNarrow ? 92 : 104
+                            Layout.preferredHeight: 36
                             onClicked: root.goNextChapter()
                         }
 
@@ -502,11 +567,11 @@ Window {
                             // الوضع العادي (عرض الفصل الحالي)
                             Rectangle {
                                 visible: !root.editingChapter
-                                implicitWidth: chapterIndicatorText.implicitWidth + 20
-                                implicitHeight: 32
-                                radius: 6
-                                color: chHover.containsMouse ? Theme.buttonBg : "transparent"
-                                border.color: chHover.containsMouse ? Theme.border : "transparent"
+                                implicitWidth: chapterIndicatorText.implicitWidth + 24
+                                implicitHeight: 34
+                                radius: 17
+                                color: chHover.containsMouse ? Theme.surfaceHi : Theme.surface
+                                border.color: chHover.containsMouse ? Theme.accentBorder : Theme.border
                                 border.width: 1
 
                                 Text {
@@ -535,11 +600,11 @@ Window {
                             Rectangle {
                                 visible: root.editingChapter
                                 Layout.preferredWidth: 56
-                                Layout.preferredHeight: 30
+                                Layout.preferredHeight: 32
                                 color: Theme.buttonBg
-                                border.color: Theme.border
+                                border.color: Theme.accent
                                 border.width: 1
-                                radius: 4
+                                radius: 8
 
                                 TextInput {
                                     id: chapterInput
@@ -573,18 +638,18 @@ Window {
                             // زر فتح القائمة المنسدلة للفصول
                             Rectangle {
                                 visible: root.editingChapter
-                                Layout.preferredWidth: 30
-                                Layout.preferredHeight: 30
+                                Layout.preferredWidth: 32
+                                Layout.preferredHeight: 32
                                 color: ddMouse.containsMouse ? Theme.border : Theme.buttonBg
                                 border.color: Theme.border
                                 border.width: 1
-                                radius: 4
+                                radius: 8
 
-                                Text {
+                                Icon {
                                     anchors.centerIn: parent
-                                    text: root.dropdownOpen ? "▲" : "▼"
+                                    name: root.dropdownOpen ? "chevron-down" : "chevron-up"
+                                    size: 16
                                     color: Theme.textMuted
-                                    font.pixelSize: 10
                                 }
 
                                 MouseArea {
@@ -601,11 +666,12 @@ Window {
 
                         ShadcnButton {
                             text: "السابق"
-                            iconSource: "icons/prev.svg"
+                            iconName: "chevron-right"
+                            iconOnRight: true
                             primary: false
                             disabled: !root.canGoPrev
-                            Layout.preferredWidth: root.isNarrow ? 88 : 100
-                            Layout.preferredHeight: 34
+                            Layout.preferredWidth: root.isNarrow ? 92 : 104
+                            Layout.preferredHeight: 36
                             onClicked: root.goPrevChapter()
                         }
                     }
@@ -631,10 +697,10 @@ Window {
 
     // طبقة شفافة لإغلاق تحرير الفصل عند النقر في أي مكان خارج الشريط السفلي
     MouseArea {
-        anchors. left: parent.left
+        anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
-        height: parent.height - (root.isNarrow ? 70 : 54)
+        height: parent.height - (root.isNarrow ? 72 : 56)
         visible: root.editingChapter && !root.dropdownOpen
         onClicked: root.editingChapter = false
     }
@@ -655,14 +721,14 @@ Window {
 
         Rectangle {
             id: dropdownBox
-            width: 140
-            height: Math.min(Math.max(root.chapterCount, 1) * 36 + 8, Math.min(340, parent.height - 90))
+            width: 150
+            height: Math.min(Math.max(root.chapterCount, 1) * 38 + 8, Math.min(340, parent.height - 90))
             x: (parent.width - width) / 2
-            y: parent.height - (root.isNarrow ? 74 : 58) - height
+            y: parent.height - (root.isNarrow ? 76 : 60) - height
             color: Theme.surface
             border.color: Theme.border
             border.width: 1
-            radius: 8
+            radius: 12
             clip: true
 
             ListView {
@@ -681,14 +747,14 @@ Window {
                     readonly property bool isCurrent: chapterNum === root.currentChapterNum
 
                     width: chapterListView.width
-                    height: 36
-                    radius: 4
-                    color: isCurrent ? Theme.border : (itemMouse.containsMouse ? Theme.buttonBg : "transparent")
+                    height: 38
+                    radius: 8
+                    color: isCurrent ? Theme.accentSoft : (itemMouse.containsMouse ? Theme.surfaceHi : "transparent")
 
                     Text {
                         anchors.centerIn: parent
                         text: "الفصل " + parent.chapterNum
-                        color: parent.isCurrent ? Theme.text : Theme.textMuted
+                        color: parent.isCurrent ? Theme.accent : Theme.textMuted
                         font.pixelSize: 13
                         font.weight: parent.isCurrent ? Font.Bold : Font.Normal
                     }
