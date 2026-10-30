@@ -18,39 +18,38 @@ ColumnLayout {
 
     Rectangle {
         Layout.fillWidth: true
-        implicitHeight: 50
+        implicitHeight: 64
         color: Theme.surface
 
         Item {
             anchors.fill: parent
 
             RowLayout {
-                width: Math.min(parent.width, 500)
-                height: parent.height
+                width: Math.min(parent.width - 16, 480)
+                height: parent.height - 12
                 anchors.centerIn: parent
-                spacing: 12
-
-                Item { width: 4 }
+                spacing: 6
 
                 TabButton {
                     text: "حول"
+                    iconName: "info"
                     active: root.currentTab === 2
                     onClicked: root.currentTab = 2
                 }
 
                 TabButton {
                     text: "الإعدادات"
+                    iconName: "settings"
                     active: root.currentTab === 1
                     onClicked: root.currentTab = 1
                 }
 
                 TabButton {
                     text: "الرئيسية"
+                    iconName: "home"
                     active: root.currentTab === 0
                     onClicked: root.currentTab = 0
                 }
-
-                Item { width: 4 }
             }
         }
     }
