@@ -6,6 +6,7 @@ on:
       - main
     tags:
       - 'v*'
+      - '[0-9]*'
   workflow_dispatch:
 
 permissions:
@@ -440,25 +441,21 @@ jobs:
           name: OpenLibrary-Alpine-apk
           path: OpenLibrary-Alpine.apk
 
-  # ===== تغليف حزمة Arch Linux =====
+  # ===== Arch Linux: يُبنى من المصدر داخل حاوية Arch نفسها (Qt الخاص بـ Arch) =====
+  # لا يعتمد على باينري Ubuntu إطلاقاً، لذلك لا تظهر مشكلة copy relocation
   build-arch:
-    name: Build Arch Package (PKGBUILD)
-    needs: build-linux-elf
+    name: Build Arch Package (native, inside archlinux container)
     runs-on: ubuntu-latest
     container:
       image: archlinux:base-devel
     steps:
+      - name: Install Build Dependencies
+        run: |
+          pacman -Syu --noconfirm --needed git sudo cmake ninja pkgconf \
+            qt6-base qt6-declarative qt6-svg libzip pugixml fontconfig
+
       - name: Checkout Code
         uses: actions/checkout@v4
-
-      - name: Download glibc Build Outputs
-        uses: actions/download-artifact@v4
-        with:
-          name: OpenLibrary-Linux-PkgBuild
-          path: build-src
-
-      - name: Install Packaging Dependencies
-        run: pacman -Syu --noconfirm --needed sudo
 
       - name: Create Non-root Build User
         run: |
@@ -466,126 +463,50 @@ jobs:
           echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
           chown -R builder:builder "$GITHUB_WORKSPACE"
 
-      - name: Prepare PKGBUILD Sources
+      - name: Write PKGBUILD
         run: |
+          VER="$(grep -oP 'project\(OpenLibrary VERSION \K[0-9.]+' CMakeLists.txt)"
+          echo "Version from CMakeLists: $VER"
           mkdir -p arch-pkg
-
-          mkdir -p arch-src/openlibrary-1.25
-          cp build-src/openlibrary arch-src/openlibrary-1.25/
-          find build-src/ -name "*.so*" -exec cp -a {} arch-src/openlibrary-1.25/ \; || true
-          cp openlibrary.desktop arch-src/openlibrary-1.25/
-          chmod +x arch-src/openlibrary-1.25/openlibrary
-          tar czf arch-pkg/openlibrary-1.25.tar.gz -C arch-src openlibrary-1.25
-
-          cat > arch-pkg/PKGBUILD <<'EOF'
+          cat > arch-pkg/PKGBUILD <<EOF
           pkgname=openlibrary
-          pkgver=1.25
+          pkgver=${VER}
           pkgrel=1
-          pkgdesc="Open source epub reader - قارئ كتب إلكترونية مفتوح المصدر"
+          pkgdesc="Open source epub reader"
           arch=('x86_64')
           url="https://github.com/ahmed-x86/openlibrary"
           license=('GPL')
-          depends=('fontconfig' 'qt6-base' 'qt6-declarative' 'qt6-svg')
-          source=("openlibrary-${pkgver}.tar.gz")
-          sha256sums=('SKIP')
+          depends=('fontconfig' 'qt6-base' 'qt6-declarative' 'qt6-svg' 'libzip' 'pugixml' 'shared-mime-info' 'desktop-file-utils')
+          makedepends=('cmake' 'ninja')
+          options=('!debug' '!lto')
+
+          build() {
+              cmake -B "\$srcdir/build" -S "\$SRCROOT" -G Ninja \\
+                  -DCMAKE_INSTALL_PREFIX=/usr \\
+                  -DCMAKE_BUILD_TYPE=Release
+              cmake --build "\$srcdir/build"
+          }
 
           package() {
-              cd "${srcdir}/openlibrary-${pkgver}"
-              install -Dm755 openlibrary "${pkgdir}/usr/bin/openlibrary"
-              install -d "${pkgdir}/usr/lib/openlibrary"
-              for lib in *.so*; do
-                  [ -e "$lib" ] && install -Dm755 "$lib" "${pkgdir}/usr/lib/openlibrary/$lib"
-              done
-              install -Dm644 openlibrary.desktop "${pkgdir}/usr/share/applications/openlibrary.desktop"
+              DESTDIR="\$pkgdir" cmake --install "\$srcdir/build"
           }
           EOF
           sed -i 's/^          //' arch-pkg/PKGBUILD
+          cat arch-pkg/PKGBUILD
 
-      - name: Build Package with makepkg -s
+      - name: Build Package with makepkg
         run: |
           chown -R builder:builder arch-pkg
           cd arch-pkg
-          su builder -c "makepkg -s --noconfirm"
-          mv openlibrary-1.25-1-x86_64.pkg.tar.zst ../OpenLibrary-Linux.pkg.tar.zst
+          su builder -c "SRCROOT='$GITHUB_WORKSPACE' makepkg -s --noconfirm"
+          ls -la
+          mv openlibrary-*-x86_64.pkg.tar.zst ../OpenLibrary-Linux.pkg.tar.zst
 
       - name: Upload Arch Package Artifact
         uses: actions/upload-artifact@v4
         with:
           name: OpenLibrary-Linux-pkg
           path: OpenLibrary-Linux.pkg.tar.zst
-
-  build-arch-musl:
-    name: Build Arch Package (PKGBUILD — musl)
-    needs: build-alpine-elf
-    runs-on: ubuntu-latest
-    container:
-      image: archlinux:base-devel
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Download musl Build Outputs
-        uses: actions/download-artifact@v4
-        with:
-          name: OpenLibrary-Linux-musl-PkgBuild
-          path: build-src
-
-      - name: Install Packaging Dependencies
-        run: pacman -Syu --noconfirm --needed sudo
-
-      - name: Create Non-root Build User
-        run: |
-          useradd -m builder
-          echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
-          chown -R builder:builder "$GITHUB_WORKSPACE"
-
-      - name: Prepare PKGBUILD Sources
-        run: |
-          mkdir -p arch-pkg
-
-          mkdir -p arch-src/openlibrary-1.25
-          cp build-src/openlibrary arch-src/openlibrary-1.25/
-          find build-src/ -name "*.so*" -exec cp -a {} arch-src/openlibrary-1.25/ \; || true
-          cp openlibrary.desktop arch-src/openlibrary-1.25/
-          chmod +x arch-src/openlibrary-1.25/openlibrary
-          tar czf arch-pkg/openlibrary-1.25.tar.gz -C arch-src openlibrary-1.25
-
-          cat > arch-pkg/PKGBUILD <<'EOF'
-          pkgname=openlibrary
-          pkgver=1.25
-          pkgrel=1
-          pkgdesc="Open source epub reader (musl build) - قارئ كتب إلكترونية مفتوح المصدر"
-          arch=('x86_64')
-          url="https://github.com/ahmed-x86/openlibrary"
-          license=('GPL')
-          depends=('fontconfig' 'qt6-base' 'qt6-declarative' 'qt6-svg')
-          source=("openlibrary-${pkgver}.tar.gz")
-          sha256sums=('SKIP')
-
-          package() {
-              cd "${srcdir}/openlibrary-${pkgver}"
-              install -Dm755 openlibrary "${pkgdir}/usr/bin/openlibrary"
-              install -d "${pkgdir}/usr/lib/openlibrary"
-              for lib in *.so*; do
-                  [ -e "$lib" ] && install -Dm755 "$lib" "${pkgdir}/usr/lib/openlibrary/$lib"
-              done
-              install -Dm644 openlibrary.desktop "${pkgdir}/usr/share/applications/openlibrary.desktop"
-          }
-          EOF
-          sed -i 's/^          //' arch-pkg/PKGBUILD
-
-      - name: Build Package with makepkg -s
-        run: |
-          chown -R builder:builder arch-pkg
-          cd arch-pkg
-          su builder -c "makepkg -s --noconfirm"
-          mv openlibrary-1.25-1-x86_64.pkg.tar.zst ../OpenLibrary-Linux-musl.pkg.tar.zst
-
-      - name: Upload Arch Package Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: OpenLibrary-Linux-musl-pkg
-          path: OpenLibrary-Linux-musl.pkg.tar.zst
 
   # ===== تغليف حزم Void Linux =====
   build-void:
@@ -895,7 +816,7 @@ jobs:
   # ===== الإصدار النهائي =====
   release:
     name: Create GitHub Release
-    needs: [build-linux-packages, build-linux-packages-musl, build-windows, build-arch, build-arch-musl, build-void, build-alpine-apk, build-android]
+    needs: [build-linux-packages, build-linux-packages-musl, build-windows, build-arch, build-void, build-alpine-apk, build-android]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     steps:
@@ -935,7 +856,7 @@ jobs:
             echo "| المكتبة \\ الصيغة | ELF | .tar.gz | .deb | .rpm | .pkg.tar.zst | .xbps | .apk |"
             echo "|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|"
             echo "| **glibc** | $(cell openlibrary-elf-glibc) |$(cell OpenLibrary-Linux-Portable.tar.gz) | $(cell OpenLibrary-Linux.deb) |$(cell OpenLibrary-Linux.rpm) | $(cell OpenLibrary-Linux.pkg.tar.zst) |$(cell OpenLibrary-Void-glibc.xbps) | ----- |"
-            echo "| **musl**  | $(cell openlibrary-elf-musllibc) | $(cell OpenLibrary-Linux-musl-Portable.tar.gz) |$(cell OpenLibrary-Linux-musl.deb) | $(cell OpenLibrary-Linux-musl.rpm) |$(cell OpenLibrary-Linux-musl.pkg.tar.zst) | $(cell OpenLibrary-Void-musl.xbps) |$(cell OpenLibrary-Alpine.apk) |"
+            echo "| **musl**  | $(cell openlibrary-elf-musllibc) | $(cell OpenLibrary-Linux-musl-Portable.tar.gz) |$(cell OpenLibrary-Linux-musl.deb) | $(cell OpenLibrary-Linux-musl.rpm) |----- | $(cell OpenLibrary-Void-musl.xbps) |$(cell OpenLibrary-Alpine.apk) |"
             echo ""
 
             echo "### 🤖 أندرويد"
@@ -981,7 +902,6 @@ jobs:
             artifacts/OpenLibrary-Linux-musl.deb
             artifacts/OpenLibrary-Linux-musl.rpm
             artifacts/OpenLibrary-Linux.pkg.tar.zst
-            artifacts/OpenLibrary-Linux-musl.pkg.tar.zst
             artifacts/OpenLibrary-Void-glibc.xbps
             artifacts/OpenLibrary-Void-musl.xbps
             artifacts/OpenLibrary-Alpine.apk
