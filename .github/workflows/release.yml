@@ -148,6 +148,9 @@ jobs:
           tar -czf rpmbuild/SOURCES/openlibrary-1.25.tar.gz -C rpmbuild/SOURCES openlibrary-1.25
 
           cat > rpmbuild/SPECS/openlibrary.spec <<'SPEC'
+          %global debug_package %{nil}
+          %global __strip /bin/true
+
           Name:           openlibrary
           Version:        1.25
           Release:        1%{?dist}
@@ -317,6 +320,9 @@ jobs:
           tar -czf rpmbuild/SOURCES/openlibrary-1.25.tar.gz -C rpmbuild/SOURCES openlibrary-1.25
 
           cat > rpmbuild/SPECS/openlibrary.spec <<'SPEC'
+          %global debug_package %{nil}
+          %global __strip /bin/true
+
           Name:           openlibrary
           Version:        1.25
           Release:        1%{?dist}
