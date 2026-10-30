@@ -80,7 +80,10 @@ endif()
 # وهو يضبط مسار Qt الصحيح و QT_HOST_PATH تلقائياً.
 
 # --- 4. مكتبات Qt6 (للواجهة والملفات عبر جميع الأنظمة) ---
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Qml Quick QuickControls2 QuickShapes)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Qml Quick QuickControls2)
+# QuickShapes صار وحدة خاصة (private) في Qt 6.7+ فلا يوجد Qt6QuickShapesConfig.cmake
+# والاستيراد في QML (import QtQuick.Shapes) لا يحتاج ربطاً في C++، لذلك نجعله اختيارياً
+find_package(Qt6 QUIET COMPONENTS QuickShapes)
 find_package(Qt6 QUIET COMPONENTS Svg)
 
 # ============================================================
@@ -148,8 +151,11 @@ target_link_libraries(openlibrary PRIVATE
     Qt6::Qml
     Qt6::Quick
     Qt6::QuickControls2
-    Qt6::QuickShapes
 )
+
+if (TARGET Qt6::QuickShapes)
+    target_link_libraries(openlibrary PRIVATE Qt6::QuickShapes)
+endif()
 
 if (TARGET Qt6::Svg)
     target_link_libraries(openlibrary PRIVATE Qt6::Svg)
