@@ -96,11 +96,26 @@ set(PROJECT_SOURCES
 if (ANDROID)
     # qt_add_executable ينتج libopenlibrary_<abi>.so بالتسمية التي يتوقعها
     # androiddeployqt ويفعّل الهدف `apk` الذي يحزّم Qt والإضافات و QML
-    qt_add_executable(openlibrary \${PROJECT_SOURCES})
+    qt_add_executable(openlibrary
+        src/main.cpp
+        src/epub_reader.cpp
+        src/epub_reader.h
+        ui/resources.qrc
+    )
 elseif (WIN32)
-    add_executable(openlibrary WIN32 \${PROJECT_SOURCES})
+    add_executable(openlibrary WIN32
+        src/main.cpp
+        src/epub_reader.cpp
+        src/epub_reader.h
+        ui/resources.qrc
+    )
 else()
-    add_executable(openlibrary \${PROJECT_SOURCES})
+    add_executable(openlibrary
+        src/main.cpp
+        src/epub_reader.cpp
+        src/epub_reader.h
+        ui/resources.qrc
+    )
 endif()
 
 # تفعيل معالجات Qt (MOC + RCC) على مشروعنا فقط لمنع التحذيرات في المكتبات الخارجية
@@ -113,14 +128,14 @@ target_include_directories(openlibrary PRIVATE src)
 
 if (ANDROID)
     set_target_properties(openlibrary PROPERTIES
-        QT_ANDROID_PACKAGE_SOURCE_DIR "\${CMAKE_CURRENT_SOURCE_DIR}/android"
+        QT_ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android"
         QT_ANDROID_PACKAGE_NAME       "com.ahmed_x86.openlibrary"
-        QT_ANDROID_VERSION_NAME       "\${PROJECT_VERSION}"
+        QT_ANDROID_VERSION_NAME       "${PROJECT_VERSION}"
         QT_ANDROID_VERSION_CODE       125
         QT_ANDROID_MIN_SDK_VERSION    24
         QT_ANDROID_TARGET_SDK_VERSION 34
         # ليفحص androiddeployqt ملفات QML ويضمّن QtQuick.Controls وبقية الوحدات
-        QT_QML_ROOT_PATH              "\${CMAKE_CURRENT_SOURCE_DIR}/ui"
+        QT_QML_ROOT_PATH              "${CMAKE_CURRENT_SOURCE_DIR}/ui"
     )
 endif()
 
@@ -155,19 +170,19 @@ if (TARGET Qt6::Svg)
 endif()
 
 # ============================================================
-# التثبيت (Installation) وإعدادات "افتح باستخدام"
+# التثبيت (Installation) وإعدادات التكامل مع النظام
 # ============================================================
 if (NOT ANDROID)
     install(TARGETS openlibrary DESTINATION bin)
     if (UNIX AND NOT APPLE)
         install(FILES openlibrary.desktop DESTINATION share/applications)
-        if (EXISTS "\${CMAKE_CURRENT_SOURCE_DIR}/assets/icon.png")
+        if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/assets/icon.png")
             install(FILES assets/icon.png DESTINATION share/pixmaps RENAME openlibrary.png)
         endif()
 
         # تعريف نوع ملف EPUB لنظام لينكس ليظهر البرنامج في قائمة "افتح باستخدام"
-        set(MIME_FILE "\${CMAKE_CURRENT_BINARY_DIR}/openlibrary-epub.xml")
-        file(WRITE "\${MIME_FILE}"
+        set(MIME_FILE "${CMAKE_CURRENT_BINARY_DIR}/openlibrary-epub.xml")
+        file(WRITE "${MIME_FILE}"
 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
 <mime-info xmlns=\"http://www.freedesktop.org/standards/shared-mime-info\">
   <mime-type type=\"application/epub+zip\">
@@ -176,7 +191,7 @@ if (NOT ANDROID)
   </mime-type>
 </mime-info>
 ")
-        install(FILES "\${MIME_FILE}" DESTINATION share/mime/packages)
+        install(FILES "${MIME_FILE}" DESTINATION share/mime/packages)
     endif()
 endif()
 
@@ -190,15 +205,14 @@ set(CPACK_PACKAGE_CONTACT "ahmed-x86")
 
 if (WIN32)
     set(CPACK_GENERATOR "NSIS;ZIP")
-    # تسجيل البرنامج في ويندوز كمعالج افتراضي وفي قائمة "Open With" لملفات .epub فقط
     set(CPACK_NSIS_EXTRA_INSTALL_COMMANDS "
         WriteRegStr HKCR \\\".epub\\\" \\\"\\\" \\\"OpenLibrary.EPUB\\\"
         WriteRegStr HKCR \\\".epub\\\\OpenWithProgids\\\" \\\"OpenLibrary.EPUB\\\" \\\"\\\"
         WriteRegStr HKCR \\\"OpenLibrary.EPUB\\\" \\\"\\\" \\\"EPUB eBook\\\"
-        WriteRegStr HKCR \\\"OpenLibrary.EPUB\\\\DefaultIcon\\\" \\\"\\\" \\\"\\\\\\\"\$INSTDIR\\\\openlibrary.exe\\\\\\\",0\\\"
-        WriteRegStr HKCR \\\"OpenLibrary.EPUB\\\\shell\\\\open\\\\command\\\" \\\"\\\" \\\"\\\\\\\"\$INSTDIR\\\\openlibrary.exe\\\\\\\" \\\\\\\"%1\\\\\\\"\\\"
+        WriteRegStr HKCR \\\"OpenLibrary.EPUB\\\\DefaultIcon\\\" \\\"\\\" \\\"\\\\\\\"$INSTDIR\\\\openlibrary.exe\\\\\\\",0\\\"
+        WriteRegStr HKCR \\\"OpenLibrary.EPUB\\\\shell\\\\open\\\\command\\\" \\\"\\\" \\\"\\\\\\\"$INSTDIR\\\\openlibrary.exe\\\\\\\" \\\\\\\"%1\\\\\\\"\\\"
         WriteRegStr HKCR \\\"Applications\\\\openlibrary.exe\\\\SupportedTypes\\\" \\\".epub\\\" \\\"\\\"
-        WriteRegStr HKCR \\\"Applications\\\\openlibrary.exe\\\\shell\\\\open\\\\command\\\" \\\"\\\" \\\"\\\\\\\"\$INSTDIR\\\\openlibrary.exe\\\\\\\" \\\\\\\"%1\\\\\\\"\\\"
+        WriteRegStr HKCR \\\"Applications\\\\openlibrary.exe\\\\shell\\\\open\\\\command\\\" \\\"\\\" \\\"\\\\\\\"$INSTDIR\\\\openlibrary.exe\\\\\\\" \\\\\\\"%1\\\\\\\"\\\"
         System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, i 0, i 0)'
     ")
     set(CPACK_NSIS_EXTRA_UNINSTALL_COMMANDS "
@@ -212,11 +226,10 @@ elseif (UNIX AND NOT APPLE AND NOT ANDROID)
     set(CPACK_DEBIAN_PACKAGE_DEPENDS "fontconfig, libqt6core6, libqt6gui6, libqt6widgets6, libqt6qml6, libqt6quick6, libqt6svg6, shared-mime-info, desktop-file-utils")
     set(CPACK_RPM_PACKAGE_REQUIRES "fontconfig, qt6-qtbase, qt6-qtdeclarative, qt6-qtsvg, shared-mime-info, desktop-file-utils")
 
-    # سكربتات ما بعد التثبيت والحذف لتحديث قائمة البرامج وروابط الملفات تلقائياً
-    set(POSTINST_SCRIPT "\${CMAKE_CURRENT_BINARY_DIR}/postinst")
-    set(POSTRM_SCRIPT "\${CMAKE_CURRENT_BINARY_DIR}/postrm")
+    set(POSTINST_SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/postinst")
+    set(POSTRM_SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/postrm")
 
-    file(WRITE "\${POSTINST_SCRIPT}"
+    file(WRITE "${POSTINST_SCRIPT}"
 "#!/bin/sh
 set -e
 if command -v update-desktop-database >/dev/null 2>&1; then
@@ -227,7 +240,7 @@ if command -v update-mime-database >/dev/null 2>&1; then
 fi
 exit 0
 ")
-    file(WRITE "\${POSTRM_SCRIPT}"
+    file(WRITE "${POSTRM_SCRIPT}"
 "#!/bin/sh
 set -e
 if command -v update-desktop-database >/dev/null 2>&1; then
@@ -238,7 +251,6 @@ if command -v update-mime-database >/dev/null 2>&1; then
 fi
 exit 0
 ")
-    execute_process(COMMAND chmod 755 "${POSTINST_SCRIPT}" "${POSTRM_SCRIPT}")
     set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "${POSTINST_SCRIPT};${POSTRM_SCRIPT}")
 endif()
 
