@@ -735,39 +735,18 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Cache static Qt
-        id: qtcache
-        uses: actions/cache@v4
-        with:
-          path: /opt/qt-static
-          key: qt-static-${{ env.QT_VER }}-alpine-v1
-
-      - name: Build static Qt from source (first run only)
-        if: steps.qtcache.outputs.cache-hit != 'true'
+      # Qt الستاتيك يُبنى مرة واحدة فقط عبر workflow باسم "Build static Qt (one-time)"
+      # وينشر نفسه في Release باسم qt-static-<version>؛ هنا نحمّله فقط (دقيقة بدل ساعة).
+      - name: Download prebuilt static Qt
         run: |
-          set -eux
-          mkdir -p /tmp/qt && cd /tmp/qt
-          BASE="https://download.qt.io/archive/qt/6.7/${QT_VER}/submodules"
-          for m in qtbase qtshadertools qtdeclarative qtsvg; do
-            curl -fsSL "$BASE/$m-everywhere-src-${QT_VER}.tar.xz" | tar xJ
-          done
-          mkdir b-qtbase && cd b-qtbase
-          ../qtbase-everywhere-src-${QT_VER}/configure -prefix "$QT_PREFIX" -static -release \
-            -opensource -confirm-license -nomake examples -nomake tests \
-            -no-opengl -no-dbus -no-icu -no-openssl -no-glib -no-cups -no-fontconfig \
-            -qt-zlib -qt-libpng -qt-libjpeg -qt-freetype -qt-harfbuzz -qt-pcre \
-            -xcb -xkbcommon
-          cmake --build . --parallel
-          cmake --install .
-          cd /tmp/qt
-          for m in qtshadertools qtdeclarative qtsvg; do
-            mkdir "b-$m" && cd "b-$m"
-            "$QT_PREFIX/bin/qt-configure-module" "../$m-everywhere-src-${QT_VER}" -- \
-              -DQT_BUILD_EXAMPLES=OFF -DQT_BUILD_TESTS=OFF
-            cmake --build . --parallel
-            cmake --install .
-            cd /tmp/qt
-          done
+          set -eu
+          URL="https://github.com/${{ github.repository }}/releases/download/qt-static-${QT_VER}/qt-static-${QT_VER}-alpine-x86_64.tar.zst"
+          if ! curl -fSL --retry 3 "$URL" -o /tmp/qt-static.tar.zst; then
+            echo "::error::Qt الستاتيك الجاهز غير موجود. شغّل مرة واحدة workflow باسم 'Build static Qt (one-time)' من تبويب Actions ثم أعد المحاولة."
+            exit 1
+          fi
+          tar -I zstd -xf /tmp/qt-static.tar.zst -C /opt
+          ls /opt/qt-static/bin | head
 
       - name: Build static OpenLibrary
         run: |
