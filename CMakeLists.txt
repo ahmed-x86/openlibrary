@@ -6,6 +6,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+# بناء ستاتيك بالكامل (يُستخدم مع Qt ستاتيك داخل حاوية Alpine في release.yml)
+option(OPENLIBRARY_STATIC_BUILD "Link everything statically" OFF)
+
 # كتم تحذيرات الإصدارات القديمة الصادرة من المكتبات الخارجية (مثل pugixml)
 set(CMAKE_WARN_DEPRECATED OFF CACHE BOOL "" FORCE)
 
@@ -103,6 +106,8 @@ if (ANDROID)
     qt_add_executable(openlibrary ${PROJECT_SOURCES})
 elseif (WIN32)
     add_executable(openlibrary WIN32 ${PROJECT_SOURCES})
+elseif (OPENLIBRARY_STATIC_BUILD)
+    qt_add_executable(openlibrary ${PROJECT_SOURCES})
 else()
     add_executable(openlibrary ${PROJECT_SOURCES})
 endif()
@@ -160,6 +165,21 @@ endif()
 
 if (TARGET Qt6::Svg)
     target_link_libraries(openlibrary PRIVATE Qt6::Svg)
+endif()
+
+# --- ستاتيك: بدون OpenGL نستخدم الرسم البرمجي، واستيراد إضافات QML داخل الملف ---
+if (OPENLIBRARY_STATIC_BUILD)
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/static_defaults.cpp" [=[
+#include <stdlib.h>
+namespace {
+struct StaticDefaults {
+    StaticDefaults() { setenv("QT_QUICK_BACKEND", "software", 0); }
+} staticDefaults;
+}
+]=])
+    target_sources(openlibrary PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/static_defaults.cpp")
+    set_target_properties(openlibrary PROPERTIES QT_QML_ROOT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/ui")
+    qt_import_qml_plugins(openlibrary)
 endif()
 
 # ============================================================
