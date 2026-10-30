@@ -80,7 +80,7 @@ endif()
 # وهو يضبط مسار Qt الصحيح و QT_HOST_PATH تلقائياً.
 
 # --- 4. مكتبات Qt6 (للواجهة والملفات عبر جميع الأنظمة) ---
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Qml Quick QuickControls2)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Qml Quick QuickControls2 QuickShapes)
 find_package(Qt6 QUIET COMPONENTS Svg)
 
 # ============================================================
@@ -96,26 +96,11 @@ set(PROJECT_SOURCES
 if (ANDROID)
     # qt_add_executable ينتج libopenlibrary_<abi>.so بالتسمية التي يتوقعها
     # androiddeployqt ويفعّل الهدف `apk` الذي يحزّم Qt والإضافات و QML
-    qt_add_executable(openlibrary
-        src/main.cpp
-        src/epub_reader.cpp
-        src/epub_reader.h
-        ui/resources.qrc
-    )
+    qt_add_executable(openlibrary ${PROJECT_SOURCES})
 elseif (WIN32)
-    add_executable(openlibrary WIN32
-        src/main.cpp
-        src/epub_reader.cpp
-        src/epub_reader.h
-        ui/resources.qrc
-    )
+    add_executable(openlibrary WIN32 ${PROJECT_SOURCES})
 else()
-    add_executable(openlibrary
-        src/main.cpp
-        src/epub_reader.cpp
-        src/epub_reader.h
-        ui/resources.qrc
-    )
+    add_executable(openlibrary ${PROJECT_SOURCES})
 endif()
 
 # تفعيل معالجات Qt (MOC + RCC) على مشروعنا فقط لمنع التحذيرات في المكتبات الخارجية
@@ -163,6 +148,7 @@ target_link_libraries(openlibrary PRIVATE
     Qt6::Qml
     Qt6::Quick
     Qt6::QuickControls2
+    Qt6::QuickShapes
 )
 
 if (TARGET Qt6::Svg)
@@ -223,7 +209,7 @@ if (WIN32)
     ")
 elseif (UNIX AND NOT APPLE AND NOT ANDROID)
     set(CPACK_GENERATOR "DEB;RPM")
-    set(CPACK_DEBIAN_PACKAGE_DEPENDS "fontconfig, libqt6core6, libqt6gui6, libqt6widgets6, libqt6qml6, libqt6quick6, libqt6svg6, shared-mime-info, desktop-file-utils")
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS "fontconfig, libqt6core6, libqt6gui6, libqt6widgets6, libqt6qml6, libqt6quick6, libqt6quickshapes6, libqt6svg6, qml6-module-qtquick, qml6-module-qtquick-window, qml6-module-qtquick-layouts, qml6-module-qtquick-controls, qml6-module-qtquick-shapes, shared-mime-info, desktop-file-utils")
     set(CPACK_RPM_PACKAGE_REQUIRES "fontconfig, qt6-qtbase, qt6-qtdeclarative, qt6-qtsvg, shared-mime-info, desktop-file-utils")
 
     set(POSTINST_SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/postinst")
