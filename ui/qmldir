@@ -1,6 +1,11 @@
 singleton Theme 1.0 Theme.qml
+Icon 1.0 Icon.qml
+LogoMark 1.0 LogoMark.qml
+Tag 1.0 Tag.qml
 ShadcnButton 1.0 ShadcnButton.qml
 IconButton 1.0 IconButton.qml
+SocialChip 1.0 SocialChip.qml
+ChoiceCard 1.0 ChoiceCard.qml
 TabButton 1.0 TabButton.qml
 BookCard 1.0 BookCard.qml
 MetadataRow 1.0 MetadataRow.qml
