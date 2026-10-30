@@ -22,6 +22,7 @@
 #include <string>
 #include <array>
 #include <cstdio>
+#include <mutex>
 
 #ifdef __ANDROID__
 #include <jni.h>
@@ -31,6 +32,11 @@ static jobject g_activity = nullptr;
 
 static QObject* g_rootObject = nullptr;
 static std::shared_ptr<EpubReader> g_reader;
+
+// مسار كتاب وصل من أندرويد (فتح بواسطة...) قبل أن تجهز واجهة QML
+static std::mutex g_pendingMutex;
+static bool g_uiReady = false;
+static std::string g_pendingBookPath;
 
 // وراثة QQmlPropertyMap عبر الباني المحمي لمنع تحذير الإهمال (Deprecation Warning) في Qt 6.10+
 class BridgeMap : public QQmlPropertyMap {
@@ -79,6 +85,8 @@ static bool openBookAndShow(const std::string& filePath) {
         updateReaderUI();
         g_rootObject->setProperty("readingMode", true);
         g_rootObject->setProperty("showInfo", false);
+        g_rootObject->setProperty("editingChapter", false);
+        g_rootObject->setProperty("dropdownOpen", false);
         return true;
     }
 
@@ -150,13 +158,23 @@ Java_com_ahmed_1x86_openlibrary_MainActivity_initJNI(JNIEnv* env, jobject thiz) 
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_ahmed_1x86_openlibrary_MainActivity_onEpubFileSelected(JNIEnv* env, jobject /* thiz */, jstring filePath) {
-    if (!g_rootObject || !g_reader || !filePath) return;
+    if (!filePath) return;
 
     const char* nativeString = env->GetStringUTFChars(filePath, nullptr);
     std::string path(nativeString ? nativeString : "");
     env->ReleaseStringUTFChars(filePath, nativeString);
+    if (path.empty()) return;
 
     std::cout << "[Android JNI] تم استلام مسار الملف من أندرويد: " << path << std::endl;
+
+    {
+        // لو الواجهة لم تجهز بعد (تشغيل مباشر من "فتح بواسطة") نحفظ المسار ويُفتح بعد التحميل
+        std::lock_guard<std::mutex> lock(g_pendingMutex);
+        if (!g_uiReady || !g_rootObject) {
+            g_pendingBookPath = path;
+            return;
+        }
+    }
 
     // تنفيذ فتح الكتاب داخل خيط Qt الرئيسي بأمان
     QMetaObject::invokeMethod(g_rootObject, [path]() {
@@ -367,6 +385,17 @@ int main(int argc, char* argv[]) {
             }
         }
     });
+
+    // أندرويد: لو وصل كتاب من "فتح بواسطة" قبل جاهزية الواجهة نفتحه الآن مباشرة
+    std::string pendingPath;
+    {
+        std::lock_guard<std::mutex> lock(g_pendingMutex);
+        g_uiReady = true;
+        pendingPath.swap(g_pendingBookPath);
+    }
+    if (!pendingPath.empty()) {
+        openBookAndShow(pendingPath);
+    }
 
     // دعم فتح كتاب مباشرة عبر تمرير مساره في سطر الأوامر (CLI)
 #ifndef __ANDROID__

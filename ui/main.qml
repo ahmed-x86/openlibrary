@@ -56,6 +56,37 @@ Window {
         readingFlickable.contentY = 0
     }
 
+    // ============ التنقل للخلف (زر الرجوع في أندرويد / Escape) ============
+    // يرجع خطوة واحدة: القائمة المنسدلة/التحرير ← معلومات الكتاب ← القراءة ← تبويب ≠ الرئيسية.
+    // يرجع true إذا تم التعامل مع الرجوع، و false إذا كنا في الرئيسية (فيُغلق التطبيق).
+    function handleBack() {
+        if (root.dropdownOpen || root.editingChapter) {
+            root.dropdownOpen = false
+            root.editingChapter = false
+            return true
+        }
+        if (root.showInfo) {
+            root.showInfo = false
+            return true
+        }
+        if (root.readingMode) {
+            root.goBackHome()
+            return true
+        }
+        if (root.currentTab !== 0) {
+            root.currentTab = 0
+            return true
+        }
+        return false
+    }
+
+    // زر الرجوع في أندرويد يصل كطلب إغلاق للنافذة: نمنعه ما دمنا لسنا في الرئيسية
+    onClosing: function(close) {
+        if (Qt.platform.os === "android" && root.handleBack()) {
+            close.accepted = false
+        }
+    }
+
     // اختصارات لوحة المفاتيح للحواسيب أو الجوالات المتصلة بكيبورد
     Shortcut {
         sequence: "Left"
@@ -69,16 +100,7 @@ Window {
     }
     Shortcut {
         sequence: "Escape"
-        onActivated: {
-            if (root.dropdownOpen || root.editingChapter) {
-                root.dropdownOpen = false
-                root.editingChapter = false
-            } else if (root.showInfo) {
-                root.showInfo = false
-            } else if (root.readingMode) {
-                root.goBackHome()
-            }
-        }
+        onActivated: root.handleBack()
     }
 
     ColumnLayout {
